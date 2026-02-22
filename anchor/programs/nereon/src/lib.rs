@@ -199,7 +199,7 @@ pub struct SubmitScore<'info> {
         init_if_needed,
         payer = authority,
         space = 8 + GameLeaderboard::INIT_SPACE,
-        seeds = [b"leaderboard", &[game_id], &[month], &year.to_le_bytes()],
+        seeds = [b"leaderboard".as_ref(), &[game_id], &[month], &year.to_le_bytes()],
         bump
     )]
     pub game_leaderboard: Account<'info, GameLeaderboard>,
@@ -215,7 +215,7 @@ pub struct SubmitScore<'info> {
 pub struct DistributeRewards<'info> {
     #[account(
         mut,
-        seeds = [b"leaderboard", &[game_id], &[month], &year.to_le_bytes()],
+        seeds = [b"leaderboard".as_ref(), &[game_id], &[month], &year.to_le_bytes()],
         bump  = game_leaderboard.bump,
     )]
     pub game_leaderboard: Account<'info, GameLeaderboard>,

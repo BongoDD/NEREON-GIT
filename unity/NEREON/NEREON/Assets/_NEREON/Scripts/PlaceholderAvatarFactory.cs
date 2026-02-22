@@ -4,27 +4,23 @@ using UnityEngine;
 /// Generates a simple humanoid placeholder at runtime from Unity primitives.
 /// No art assets required — works immediately out of the box.
 ///
-/// DESIGN
-/// ───────
-/// Each "class" variant is the same capsule-body + sphere-head shape,
-/// but with a distinct base color and a glowing accent light.
-/// When the developer imports real character models, they register them in
-/// AvatarRegistry.asset and the placeholder is never used again.
+/// ELEMENTS: Fire · Water · Earth · Air
+/// Your element is cosmetic — it represents your identity in NEREON.
+/// Mini-games are purely skill-based; element does not affect gameplay.
 ///
-/// USAGE
-/// ───────
-///   var go = PlaceholderAvatarFactory.Create(PlaceholderAvatarFactory.Class.Warrior);
+/// When the developer imports real character models, register them in
+/// AvatarRegistry.asset and this placeholder is never used again.
 /// </summary>
 public static class PlaceholderAvatarFactory
 {
-    // ── Class definitions ─────────────────────────────────────────────────────
+    // ── Element definitions ───────────────────────────────────────────────────
 
     public enum Class : byte
     {
-        Warrior = 0,
-        Mage    = 1,
-        Rogue   = 2,
-        Paladin = 3,
+        Fire  = 0,
+        Water = 1,
+        Earth = 2,
+        Air   = 3,
     }
 
     public struct ClassInfo
@@ -32,38 +28,38 @@ public static class PlaceholderAvatarFactory
         public string DisplayName;
         public string Description;
         public Color  BodyColor;
-        public Color  AccentColor;  // point-light glow colour
+        public Color  AccentColor;
     }
 
     public static readonly ClassInfo[] Classes =
     {
         new ClassInfo
         {
-            DisplayName  = "WARRIOR",
-            Description  = "Fearless frontline fighter. High health, relentless aggression.",
-            BodyColor    = new Color(0.75f, 0.15f, 0.10f), // deep red
-            AccentColor  = new Color(1.00f, 0.25f, 0.10f),
+            DisplayName  = "FIRE",
+            Description  = "Fierce and relentless. The Fire avatar burns with passion and raw power.",
+            BodyColor    = new Color(0.80f, 0.18f, 0.05f), // deep ember red
+            AccentColor  = new Color(1.00f, 0.50f, 0.05f), // bright orange glow
         },
         new ClassInfo
         {
-            DisplayName  = "MAGE",
-            Description  = "Master of arcane arts. Low health, devastating skills.",
-            BodyColor    = new Color(0.15f, 0.30f, 0.80f), // royal blue
-            AccentColor  = new Color(0.40f, 0.60f, 1.00f),
+            DisplayName  = "WATER",
+            Description  = "Fluid and adaptive. The Water avatar flows through every challenge.",
+            BodyColor    = new Color(0.08f, 0.28f, 0.85f), // deep ocean blue
+            AccentColor  = new Color(0.30f, 0.75f, 1.00f), // cyan shimmer
         },
         new ClassInfo
         {
-            DisplayName  = "ROGUE",
-            Description  = "Shadow and speed. Precision strikes, high risk, high reward.",
-            BodyColor    = new Color(0.10f, 0.55f, 0.20f), // forest green
-            AccentColor  = new Color(0.30f, 1.00f, 0.45f),
+            DisplayName  = "EARTH",
+            Description  = "Grounded and enduring. The Earth avatar stands firm against all odds.",
+            BodyColor    = new Color(0.22f, 0.42f, 0.08f), // forest green
+            AccentColor  = new Color(0.55f, 0.85f, 0.20f), // lime highlight
         },
         new ClassInfo
         {
-            DisplayName  = "PALADIN",
-            Description  = "Blessed by the chain. Balanced stats, radiant aura.",
-            BodyColor    = new Color(0.70f, 0.60f, 0.10f), // gold
-            AccentColor  = new Color(1.00f, 0.90f, 0.30f),
+            DisplayName  = "AIR",
+            Description  = "Swift and untouchable. The Air avatar moves faster than thought itself.",
+            BodyColor    = new Color(0.72f, 0.72f, 0.88f), // pale lavender
+            AccentColor  = new Color(0.95f, 0.95f, 1.00f), // white-silver shimmer
         },
     };
 

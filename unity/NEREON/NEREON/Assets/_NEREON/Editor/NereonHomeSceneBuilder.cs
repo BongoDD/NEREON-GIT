@@ -262,6 +262,13 @@ public static class NereonHomeSceneBuilder
             nmGO.AddComponent<NereonNetworkManager>();
         }
 
+        // AuthGuard — redirects to LandingScene if wallet not connected
+        if (root.GetComponentInChildren<NereonAuthGuard>() == null)
+        {
+            var go = FindOrCreate(root, "AuthGuard");
+            go.AddComponent<NereonAuthGuard>();
+        }
+
         Debug.Log("[Builder] [Managers] created.");
     }
 

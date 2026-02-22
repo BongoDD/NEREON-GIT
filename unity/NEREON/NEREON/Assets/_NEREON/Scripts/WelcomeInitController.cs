@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
-using Solana.Unity.Rpc.Models;
+using Solana.Unity.Rpc.Builders;
 using Solana.Unity.Rpc.Types;
 using Solana.Unity.SDK;
+using Solana.Unity.Wallet;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -38,45 +39,90 @@ public class WelcomeInitController : MonoBehaviour
 
         try
         {
-            var wallet    = Web3.Account;
+            var wallet = Web3.Account;
+
+            if (wallet == null)
+            {
+                SetStatus("No wallet connected — returning to login.", loading: false);
+                Debug.LogWarning("[NEREON] CompleteSetup: Web3.Account is null.");
+                await UniTask.Delay(1500);
+                SceneManager.LoadScene("LandingScene");
+                return;
+            }
+
+            // ── Check balance first ───────────────────────────────────────────
+            SetStatus("Checking wallet balance…", loading: true);
+            var balanceResult = await Web3.Rpc.GetBalanceAsync(wallet.PublicKey.Key);
+            ulong lamports = balanceResult?.Result?.Value ?? 0;
+            Debug.Log($"[NEREON] Wallet balance: {lamports} lamports ({lamports / 1_000_000_000.0} SOL)");
+
+            if (lamports < 10_000_000) // less than 0.01 SOL
+            {
+                SetStatus("Wallet has insufficient SOL. Visit faucet.solana.com to get devnet SOL.", loading: false);
+                Debug.LogError("[NEREON] Insufficient balance for transaction fees.");
+                return;
+            }
+
+            SetStatus("Fetching latest block…", loading: true);
             var blockHash = await Web3.Rpc.GetLatestBlockHashAsync();
+
+            if (blockHash?.Result?.Value == null)
+            {
+                SetStatus("Cannot reach Solana RPC — check your connection.", loading: false);
+                Debug.LogError($"[NEREON] GetLatestBlockHash failed: {blockHash?.Reason}");
+                return;
+            }
 
             var ix = NereonClient.BuildInitializeUserIx(wallet.PublicKey, AvatarId, Username);
 
-            var transaction = new Transaction
-            {
-                RecentBlockHash = blockHash.Result.Value.Blockhash,
-                FeePayer        = wallet.PublicKey,
-                Instructions    = new List<TransactionInstruction> { ix },
-                Signatures      = new List<SignaturePubKeyPair>()
-            };
+            Debug.Log($"[NEREON] Building tx: programId={NereonClient.PROGRAM_ID}, " +
+                      $"avatar={AvatarId}, username={Username}, " +
+                      $"accounts={ix.Keys.Count}, dataLen={ix.Data.Length}");
 
-            var result = await Web3.Wallet.SignAndSendTransaction(transaction);
+            SetStatus("Signing transaction…", loading: true);
+            byte[] txBytes = new TransactionBuilder()
+                .SetRecentBlockHash(blockHash.Result.Value.Blockhash)
+                .SetFeePayer(wallet.PublicKey)
+                .AddInstruction(ix)
+                .Build(new List<Account> { wallet });
+
+            SetStatus("Sending to network…", loading: true);
+            Debug.Log($"[NEREON] Sending tx ({txBytes.Length} bytes)");
+
+            var result = await Web3.Rpc.SendTransactionAsync(
+                txBytes,
+                skipPreflight: false,
+                commitment: Commitment.Confirmed);
 
             if (result?.Result == null)
             {
-                SetStatus("Transaction failed — please try again.", loading: false);
+                var errMsg = result?.Reason ?? "unknown error";
+                Debug.LogError($"[NEREON] SendTransaction failed: {errMsg}");
+                
+                // Log the full error for debugging
+                if (result?.RawRpcResponse != null)
+                    Debug.LogError($"[NEREON] Raw RPC response: {result.RawRpcResponse}");
+
+                SetStatus($"Transaction failed: {errMsg}", loading: false);
                 return;
             }
 
             SetStatus("Confirming on-chain…", loading: true);
             await Web3.Rpc.ConfirmTransaction(result.Result, Commitment.Confirmed);
 
-            Debug.Log($"[NEREON] Profile created on-chain. Tx: {result.Result}");
+            Debug.Log($"[NEREON] Profile created. Tx: {result.Result}");
             SceneManager.LoadScene("HomeScene");
         }
         catch (Exception e)
         {
-            Debug.LogError($"[NEREON] initialize_user failed: {e.Message}");
-            SetStatus("Something went wrong — please try again.", loading: false);
+            Debug.LogError($"[NEREON] initialize_user failed: {e.Message}\n{e.StackTrace}");
+            SetStatus($"Error: {e.Message}", loading: false);
         }
     }
 
     private void SetStatus(string message, bool loading)
     {
-        // Prefer WelcomeSceneFlow for status display (it owns the Confirming panel)
         if (_flow != null) { _flow.SetConfirmStatus(message, loading); return; }
-
         Debug.Log($"[WelcomeInit] {message}");
     }
 }
