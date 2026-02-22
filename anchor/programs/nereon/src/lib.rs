@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("11111111111111111111111111111111"); // ⚠️  Replace after `anchor deploy`
+declare_id!("4cPPQDNMuwNnXRaNHxvo2gyDhwue1bE8MLzSW3VqcS4o"); // ✅ Real Program ID
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

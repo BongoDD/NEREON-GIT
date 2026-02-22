@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 using Cysharp.Threading.Tasks;
+using Solana.Unity.Programs;
 using Solana.Unity.Rpc.Models;
 using Solana.Unity.Rpc.Builders;
 using Solana.Unity.SDK;
@@ -25,7 +26,7 @@ public static class NereonClient
     // ── Program Identity ──────────────────────────────────────────────────────
 
     /// Replace this with your deployed Program ID after `anchor deploy`.
-    public const string PROGRAM_ID = "11111111111111111111111111111111";
+    public const string PROGRAM_ID = "4cPPQDNMuwNnXRaNHxvo2gyDhwue1bE8MLzSW3VqcS4o";
 
     private static readonly PublicKey ProgramKey = new PublicKey(PROGRAM_ID);
 
@@ -76,6 +77,16 @@ public static class NereonClient
         return result?.Result?.Value != null;
     }
 
+    /// Decodes a fixed [u8;32] username byte array (stored on-chain) to a trimmed string.
+    public static string DecodeUsername(byte[] usernameBytes)
+    {
+        if (usernameBytes == null || usernameBytes.Length == 0) return "Adventurer";
+        // Find first null byte to trim padding
+        int length = System.Array.IndexOf(usernameBytes, (byte)0);
+        if (length < 0) length = usernameBytes.Length;
+        return length == 0 ? "Adventurer" : Encoding.UTF8.GetString(usernameBytes, 0, length);
+    }
+
     // ── Account Fetching ──────────────────────────────────────────────────────
 
     /// Fetch and deserialize the CharacterStats account. Returns null if not found.
@@ -87,6 +98,17 @@ public static class NereonClient
 
         var raw = Convert.FromBase64String(result.Result.Value.Data[0]);
         return CharacterStatsData.Deserialize(raw);
+    }
+
+    /// Fetch and deserialize the UserProfile account. Returns null if not found.
+    public static async UniTask<UserProfileData?> FetchUserProfileAsync(PublicKey wallet)
+    {
+        var pda    = DeriveUserProfilePDA(wallet);
+        var result = await Web3.Rpc.GetAccountInfoAsync(pda.Key);
+        if (result?.Result?.Value?.Data == null) return null;
+
+        var raw = Convert.FromBase64String(result.Result.Value.Data[0]);
+        return UserProfileData.Deserialize(raw);
     }
 
     /// Fetch and deserialize a GameLeaderboard account. Returns null if no scores yet.
@@ -232,7 +254,8 @@ public static class NereonClient
     ///   SHA256("global:<instruction_name>")[0..8]
     private static byte[] Discriminator(string name)
     {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"global:{name}"));
+        using var sha = SHA256.Create();
+        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes($"global:{name}"));
         return hash[..8];
     }
 
@@ -253,6 +276,37 @@ public static class NereonClient
 
 // ─── On-Chain Account Data Models ─────────────────────────────────────────────
 // Borsh layout mirrors the Rust structs exactly (after the 8-byte discriminator).
+
+[Serializable]
+public struct UserProfileData
+{
+    public string Authority;   // base-58 pubkey string
+    public byte   AvatarId;
+    public byte[] Username;    // raw [u8; 32] — decode with NereonClient.DecodeUsername()
+    public long   CreatedAt;   // Unix timestamp
+
+    // Rust layout (after 8-byte discriminator):
+    //   authority [32] | avatar_id [1] | username [32] | created_at [8] | bump [1]
+    public static UserProfileData? Deserialize(byte[] raw)
+    {
+        const int MIN = 8 + 32 + 1 + 32 + 8 + 1;
+        if (raw == null || raw.Length < MIN) return null;
+
+        int o = 8; // skip discriminator
+        var authority = new PublicKey(raw[o..(o + 32)]).Key; o += 32;
+        var avatarId  = raw[o++];
+        var username  = raw[o..(o + 32)];                    o += 32;
+        var createdAt = BitConverter.ToInt64(raw, o);
+
+        return new UserProfileData
+        {
+            Authority = authority,
+            AvatarId  = avatarId,
+            Username  = username,
+            CreatedAt = createdAt,
+        };
+    }
+}
 
 [Serializable]
 public struct CharacterStatsData

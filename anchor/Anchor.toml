@@ -1,13 +1,15 @@
+[toolchain]
+anchor_version = "0.32.1"
+
 [features]
-seeds = false
+resolution = true
 skip-lint = false
 
 [programs.devnet]
-# ⚠️  Replace this with your real Program ID after first `anchor deploy`
-nereon = "11111111111111111111111111111111"
+nereon = "4cPPQDNMuwNnXRaNHxvo2gyDhwue1bE8MLzSW3VqcS4o"
 
 [programs.mainnet]
-nereon = "11111111111111111111111111111111"
+nereon = "4cPPQDNMuwNnXRaNHxvo2gyDhwue1bE8MLzSW3VqcS4o"
 
 [registry]
 url = "https://api.apr.dev"
