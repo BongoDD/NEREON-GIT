@@ -205,68 +205,197 @@ HomeScene
 
 ## 🗺️ Roadmap
 
-### Phase 1 — Toolchain (dev machine, one-time)
-- [x] Install Rust (`rustup.rs`)
-- [x] Install Solana CLI
-- [x] Install Anchor CLI (`avm`)
+### Phase 1 — Toolchain ✅ COMPLETE
+- [x] Install Rust, Solana CLI, Anchor CLI (`avm`)
 - [x] Create deploy keypair, fund on Devnet
 
-### Phase 2 — Anchor Program (Core)
-- [ ] `UserProfile` + `CharacterStats` accounts
-- [ ] `initialize_user` instruction
-- [ ] `update_profile` instruction
-- [ ] `submit_score` instruction + XP award logic
-- [ ] `GameLeaderboard` + top-5 tracking
-- [ ] `distribute_monthly_rewards` instruction (crank)
-- [ ] `RewardEscrow` + `fund_escrow` instruction
-- [ ] `anchor build` → IDL generated
-- [ ] `anchor deploy` → Devnet Program ID captured
+### Phase 2 — Anchor Program ✅ COMPLETE (deploy pending)
+- [x] `UserProfile` + `CharacterStats` + `GameLeaderboard` accounts
+- [x] `initialize_user` instruction
+- [x] `update_profile` instruction
+- [x] `submit_score` + XP award logic + top-5 leaderboard
+- [x] `distribute_monthly_rewards` instruction
+- [x] `anchor build` → IDL generated at `anchor/target/idl/nereon.json`
+- [ ] `anchor deploy` → confirm Devnet Program ID live
 
 ### Phase 3 — Unity ↔ Anchor Bridge
-- [ ] Add `com.magicblock.solana.anchor` to `Packages/manifest.json`
-- [ ] Copy IDL into `Assets/_NEREON/IDL/nereon.json`
-- [ ] Write `NereonClient.cs` (PDA derivation, account fetch, instruction builders)
+- [x] `com.solana.unity_sdk` in manifest (MagicBlock)
+- [x] IDL at `Assets/_NEREON/IDL/nereon.json`
+- [x] `NereonClient.cs` generated at `Assets/_NEREON/Scripts/generated/`
+- [ ] Verify `NereonClient.cs` — PDA derivation, all instruction builders correct
 
 ### Phase 4 — Replace PlayerPrefs (Login Flow)
-- [ ] `LoginFlowController` → async RPC PDA existence check
-- [ ] `WelcomeInitController` → send `initialize_user` transaction
+- [ ] `LoginFlowController` → async RPC check if `UserProfile` PDA exists
+- [ ] `WelcomeInitController` → send real `initialize_user` transaction
 
 ### Phase 5 — Town Hub World
-- [x] UIAnimations.cs (DOTween-ready fade/slide/pop/typewriter)
-- [x] SkyboxController.cs (Blockade Labs AI skybox at runtime)
-- [x] HomeSceneManager.cs (loads on-chain data, refresh HUD on return)
-- [x] PlayerHUD.cs (level / XP bar / username display)
-- [x] MiniGamePortal.cs (trigger-zone → scene load with eligibility)
-- [x] WorldConfig.cs (ScriptableObject: all buildings/games defined in one place)
-- [x] BuildingInteraction.cs (level-gate check → on-chain → enter/deny)
-- [ ] Terrain — Unity Terrain tool, restricted open world with natural boundaries
-- [ ] Third-person character (Starter Assets import + PlayerSetup.cs)
-- [ ] Village District layouts (see World Design below)
-- [ ] Central Hub Plaza (spawn, notice board, fountain)
-- [ ] Leaderboard Notice Board UI (reads GameLeaderboard PDAs)
-- [ ] Multiplayer presence (other players visible in hub)
+- [x] All hub world scripts written (HomeSceneManager, PlayerHUD, MiniGamePortal, WorldConfig, BuildingInteraction, etc.)
+- [x] HomeScene structured: MapMagic terrain, [Districts] (CentralPlaza, MarketBazaar, MysticQuarter, ChampionArena), [Player], [Managers], [HUD Canvas], NetworkManager
+- [x] `com.unity.services.relay`, `com.unity.services.lobby`, `com.unity.services.authentication`, `com.unity.netcode.gameobjects` all installed
+- [x] Billing profile set up on NEREON Unity organisation
+- [ ] Link Unity Project ID in Editor (Project Settings → Services)
+- [ ] Wire `NereonNetworkManager.cs` with UGS Authentication + Relay initialisation
+- [ ] Third-person character controller (Starter Assets + `PlayerSetup.cs`)
+- [ ] `WorldConfig` ScriptableObject asset created with 4 initial buildings
+- [ ] Place building meshes in Districts (placeholder or real art)
+- [ ] Leaderboard Notice Board UI (reads `GameLeaderboard` PDAs)
 
 ### Phase 6 — Mini-Game Framework
-- [ ] `IMinigame` interface in Unity
-- [ ] Score submission flow (play → score → sign → `submit_score` tx)
+- [ ] `IMinigame` interface
+- [ ] Score submission flow → `submit_score` tx
 - [ ] XP & level-up feedback UI
-- [ ] Per-building monthly leaderboard UI panel
 
 ### Phase 7 — NEREON Token
 - [ ] Mint NEREON SPL token
-- [ ] Fund RewardEscrow on-chain
+- [ ] Add `fund_escrow` instruction to Anchor program
 - [ ] Test `distribute_monthly_rewards` on Devnet
 
-### Phase 8 — First Mini-Game (TBD)
-- [ ] Choose game type for Building_01
-- [ ] Build game mechanics (skill + luck element)
+### Phase 8 — First Mini-Game
+- [ ] Choose game type for `CentralPlaza` building
+- [ ] Build mechanics (skill + luck element)
 - [ ] Integrate with mini-game framework
 
 ### Phase 9 — Seeker Submission
 - [ ] End-to-end Devnet test
 - [ ] Promote to Mainnet
-- [ ] Mobile Wallet Adapter verified on Seeker hardware
+- [ ] MWA verified on Seeker hardware
 - [ ] Submit via https://seeker.solana.com
+
+---
+
+## 💬 Key Decisions Made
+| Date | Decision | Reason |
+|---|---|---|
+| 2026-02-21 | Use Anchor (Rust) for all on-chain logic | Industry standard; IDL enables typed C# client |
+| 2026-02-21 | UserProfile + CharacterStats stored as PDAs keyed on wallet | Deterministic, no centralised lookup needed |
+| 2026-02-21 | PlayerPrefs fully removed from core data | Required for Seeker dApp store qualification |
+| 2026-02-21 | Mobile Wallet Adapter for Seeker hardware | SDK includes MWA; Seeker Seed Vault is MWA-compatible |
+| 2026-02-21 | Restricted open-world third-person RPG hub town | Core vision: cute town, each building = 1 mini-game |
+| 2026-02-21 | Monthly top-5 auto-rewarded by smart contract | No central authority; fully trustless |
+| 2026-02-21 | Character levels up via XP from mini-games | RPG loop keeps players engaged across all games |
+| 2026-02-21 | Each game gets its own leaderboard PDA (game_id + month) | Modular — new games added without changing existing accounts |
+| 2026-02-24 | Unity Relay + Lobby + NGO for hub multiplayer | All packages already installed; billing activated |
+| 2026-02-24 | MapMagic for procedural terrain | Already in HomeScene; dynamic world generation |
+| 2026-02-24 | 4 Districts: CentralPlaza, MarketBazaar, MysticQuarter, ChampionArena | Scene already structured this way |
+
+---
+
+## ❓ Open Questions / TBD
+- What game types per district building? (CentralPlaza, MarketBazaar, MysticQuarter, ChampionArena) — *TBD*
+- NEREON token: new SPL mint or use SOL directly for rewards? — *TBD*
+- Monthly reward crank: keeper bot, Clockwork, or manual? — *TBD*
+- XP curve: how much XP per game? How many levels total? — *TBD*
+- Art style reference: what games inspire the visual direction? — *TBD*
+- Third-person character: Unity Starter Assets or custom rig? — *TBD*
+- On-chain randomness: Switchboard VRF or Orao VRF? — *TBD*
+
+---
+
+## 🔌 Unity MCP Integration
+
+Unity MCP server (`mcp-for-unity-server v2.14.1`) is running at `http://localhost:8080/mcp`.
+- Instance: `NEREON@a4fa1463f7878701` (Unity 6000.3.9f1)
+- Use `build_index` (not `path`) for `manage_scene` load actions
+- `.mcp.json` at repo root configures the connection
+
+---
+
+## ✅ Work Completed
+
+### Session — 2026-02-24
+
+#### Anchor Program
+- Verified `lib.rs` is **fully complete**: `initialize_user`, `update_profile`, `submit_score`, `distribute_monthly_rewards`, all PDAs, events, errors.
+- **`anchor build` succeeded** → IDL generated at `anchor/target/idl/nereon.json`
+- IDL copied to `Assets/_NEREON/IDL/nereon.json` ✅
+- Deploy to Devnet still pending (next session: `anchor deploy`)
+
+#### Unity Project Audit (via MCP)
+- **LandingScene**: Fixed — removed duplicate `LoginManager` GameObject (had redundant `LoginFlowController`). Now has exactly one `LoginFlowController`. ✅
+- **WelcomeInitScene**: Verified correct — `FlowManager` has `WelcomeSceneFlow`, `WelcomeInitController`, `AvatarSelector`, `NereonAuthGuard`. ✅
+- **HomeScene**: Fully structured ✅
+  - `MapMagic` + `TerrainBuildingPlacer` — procedural terrain ready
+  - `[Environment]`: Sun, River, SkyboxManager (SkyboxController)
+  - `[Districts]`: CentralPlaza, MarketBazaar, MysticQuarter, ChampionArena
+  - `[Player]`: SpawnPoint
+  - `[Managers]`: HomeSceneManager, AuthGuard (NereonAuthGuard)
+  - `[HUD Canvas]`: FadeOverlay, PlayerHUD, ChatInputPanel
+  - `NetworkManager`: NetworkManager + UnityTransport + NereonNetworkManager
+  - Build settings: LandingScene(0), WelcomeInitScene(1), HomeScene(2) ✅
+
+#### Unity Packages (all already installed)
+| Package | Version | Purpose |
+|---|---|---|
+| `com.unity.services.authentication` | 3.3.4 | UGS identity |
+| `com.unity.services.relay` | 1.0.3 | Multiplayer relay |
+| `com.unity.services.lobby` | 1.2.2 | Room/lobby system |
+| `com.unity.services.core` | 1.12.5 | UGS core |
+| `com.unity.netcode.gameobjects` | 2.1.1 | NGO multiplayer |
+| `com.unity.cinemachine` | 3.1.2 | Camera system |
+| `com.unity.ai.navigation` | 2.0.10 | NavMesh |
+| `com.solana.unity_sdk` | git | Solana wallet |
+
+#### Unity Dashboard / Organisation
+- **Billing profile set up on NEREON organisation** ✅ — UGS cloud services (Relay, Lobby, Authentication) now fully active.
+- **TODO**: In Unity Editor → Edit > Project Settings > Services → link to NEREON org project ID to activate UGS in-editor.
+
+---
+
+## 🗺️ Roadmap
+
+### Phase 1 — Toolchain ✅ COMPLETE
+### Phase 2 — Anchor Program ✅ COMPLETE (deploy pending)
+- [x] All instructions written and compiled
+- [ ] `anchor deploy` → Devnet Program ID confirmed on-chain
+
+### Phase 3 — Unity ↔ Anchor Bridge
+- [x] IDL generated and copied to `Assets/_NEREON/IDL/nereon.json`
+- [x] `com.solana.unity_sdk` already in manifest
+- [ ] Verify/finalize `NereonClient.cs` (PDA derivation + instruction builders)
+
+### Phase 4 — Replace PlayerPrefs (Login Flow)
+- [ ] `LoginFlowController` → async RPC PDA existence check (replace PlayerPrefs)
+- [ ] `WelcomeInitController` → send real `initialize_user` transaction
+
+### Phase 5 — Town Hub World (Scenes Built ✅)
+- [x] All hub world scripts written (HomeSceneManager, PlayerHUD, MiniGamePortal, etc.)
+- [x] HomeScene structured (MapMagic terrain, Districts, Player, Managers, HUD)
+- [ ] Link Unity Project ID in Editor to activate UGS services
+- [ ] Wire `NereonNetworkManager.cs` to use UGS Authentication + Relay properly
+- [ ] Place actual district buildings (placeholder meshes → real art)
+- [ ] Third-person character controller (Starter Assets import)
+- [ ] `WorldConfig` ScriptableObject asset created with initial buildings
+- [ ] Leaderboard Notice Board UI (reads GameLeaderboard PDAs)
+
+### Phase 6 — Mini-Game Framework
+- [ ] `IMinigame` interface
+- [ ] Score submission flow → `submit_score` tx
+- [ ] XP & level-up feedback UI
+
+### Phase 7 — NEREON Token
+- [ ] Mint NEREON SPL token
+- [ ] Add `fund_escrow` instruction to Anchor program
+- [ ] Fund RewardEscrow, test `distribute_monthly_rewards` on Devnet
+
+### Phase 8 — First Mini-Game (TBD)
+### Phase 9 — Seeker Submission
+
+---
+
+## 📦 Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Blockchain | Solana |
+| Smart Contract | Rust + Anchor framework |
+| On-chain randomness | Switchboard VRF (or similar) — TBD |
+| Unity SDK | Solana.Unity-SDK (MagicBlock Labs) — git |
+| Wallet (mobile) | Mobile Wallet Adapter → Seeker Seed Vault |
+| Wallet (web/desktop) | Web3Auth (Google/Twitter social login) |
+| Multiplayer | Unity Netcode for GameObjects + Unity Relay + Unity Lobby |
+| Terrain | MapMagic (procedural) |
+| Camera | Cinemachine 3.1.2 |
+| Navigation | Unity AI Navigation (NavMesh) |
 
 ---
 
@@ -279,24 +408,23 @@ HomeScene
 | 2026-02-21 | Mobile Wallet Adapter for Seeker hardware | SDK already includes MWA; Seeker Seed Vault is MWA-compatible |
 | 2026-02-21 | Restricted open-world third-person RPG hub town | Core game vision: cute town, each building = 1 mini-game |
 | 2026-02-21 | Monthly leaderboard top-5 auto-rewarded by smart contract | No central authority needed; fully trustless rewards |
-| 2026-02-21 | Character levels up via XP earned from mini-games | RPG progression loop keeps players engaged across all games |
-| 2026-02-21 | Each game gets its own leaderboard PDA (game_id + month) | Modular — new games added without changing existing accounts |
+| 2026-02-24 | Unity Relay + Lobby for hub multiplayer | Already installed; billing profile activated on NEREON org |
+| 2026-02-24 | MapMagic for procedural terrain | Already in HomeScene; allows dynamic world generation |
 
 ---
 
 ## ❓ Open Questions / TBD
 - What type of mini-games go in each building? (card, puzzle, arcade, dice, fishing…) — *TBD*
-- How many buildings in the first version of the town? — *TBD*
+- How many buildings in the first version? CentralPlaza, MarketBazaar, MysticQuarter, ChampionArena defined — *need game types*
 - NEREON token: new SPL mint or use SOL directly for rewards? — *TBD*
-- Multiplayer solution for the hub world: Photon PUN2, Mirror, Unity Netcode? — *TBD*
-- On-chain randomness: Switchboard VRF or Orao VRF? — *TBD*
 - Monthly reward distribution: who triggers the crank? (keeper bot, Clockwork, manual?) — *TBD*
 - XP curve: how much XP per game? How many levels? — *TBD*
 - Art style reference: what games inspire the visual direction? — *TBD*
+- Third-person character: use Unity Starter Assets or custom? — *TBD*
 
 ---
 
-*Last updated: Session 4 — World design documented, hub world scripts written.*
+*Last updated: Session 5 — anchor build ✅, IDL in Unity ✅, all scenes audited ✅, UGS billing activated ✅*
 
 ---
 
@@ -733,3 +861,104 @@ ChatBubble (World Space Canvas, scale 0.01)
 3. Copy Project ID → Unity Editor: Edit → Project Settings → Services
 
 *Last updated: Session 7 — MapMagic terrain integration + multiplayer presence + bubble chat.*
+
+### Session 8 — Inspector Wiring via MCP + HomeScene Finalised
+
+#### Key Discovery: MCP Object Reference Format
+`manage_components set_property` accepts scene object references as `{"instanceID": <int>}` (not integer directly, not string path). Asset references (prefabs, scriptable objects) use the asset path string directly. This unblocks all inspector wiring via MCP.
+
+#### All Inspector Refs Wired (HomeScene — fully wired, saved, 0 errors)
+
+**HomeSceneManager (`[Managers]/HomeSceneManager`):**
+| Field | Wired To |
+|---|---|
+| `_hud` | `PlayerHUD` component on `[HUD Canvas]/PlayerHUD` |
+| `_skybox` | `SkyboxController` on `[Environment]/SkyboxManager` |
+| `_networkManager` | `NereonNetworkManager` on `NetworkManager` GO |
+| `_fadeOverlay` | `CanvasGroup` on `[HUD Canvas]/FadeOverlay` |
+
+**NereonNetworkManager (`NetworkManager` GO):**
+| Field | Wired To |
+|---|---|
+| `_networkManager` | `NetworkManager` component on same GO |
+| `_hubPlayerPrefab` | `Assets/_NEREON/Prefabs/HubPlayer.prefab` |
+
+#### HubPlayer Prefab Verified
+`Assets/_NEREON/Prefabs/HubPlayer.prefab` already exists and is fully set up:
+- Components: `CharacterController`, `ThirdPersonController`, `PlayerInput`, `StarterAssetsInputs`, `NetworkObject`, `NetworkTransform`, `PlayerSetup`, `RemotePlayerVisuals`, `BubbleChat`, `HubPlayerNetwork`
+- Variant of `StarterAssets/ThirdPersonController/Prefabs/PlayerCapsule.prefab`
+- Registered in NetworkManager's prefab list (required for NGO spawning)
+
+#### WorldConfig.asset Verified
+All 5 buildings populated with correct data (GameId 0-4, positions, districts, min levels). No changes needed.
+
+#### SpawnPoint Tagged
+`[Player]/SpawnPoint` GO now has `tag = "SpawnPoint"` — `PlayerSetup.PlaceAtSpawnPoint()` will find it correctly.
+
+#### HomeScene State (as of end of session)
+```
+HomeScene
+├── Main Camera
+├── Directional Light
+├── MapMagic       ← MapMagicObject + TerrainBuildingPlacer
+├── [Environment]
+│   ├── Sun (Light)
+│   ├── River (MeshRenderer)
+│   └── SkyboxManager  ← SkyboxController ✅ wired
+├── [Districts]    ← 4 districts
+├── [Player]
+│   └── SpawnPoint  ← tag="SpawnPoint" ✅
+├── [Managers]
+│   ├── HomeSceneManager  ← ALL 4 refs wired ✅
+│   └── AuthGuard (NereonAuthGuard)
+├── [HUD Canvas]
+│   ├── FadeOverlay   ← CanvasGroup ✅
+│   ├── PlayerHUD     ← PlayerHUD ✅
+│   └── ChatInputPanel
+└── NetworkManager  ← NetworkManager + UnityTransport + NereonNetworkManager (all refs wired ✅)
+```
+
+#### Remaining Tasks (next session)
+1. **Unity Project Settings → Services**: Link NEREON Unity org Project ID in Editor (Edit → Project Settings → Services). Required for Relay/Lobby to work at runtime.
+2. **Register HubPlayer prefab in NGO**: NetworkManager → NetworkPrefabs list → add HubPlayer.prefab. Required for `SpawnWithOwnership` to work.
+3. **Third-person camera setup**: Cinemachine Virtual Camera targeting player, follow + look-at.
+4. **Building meshes**: Place KayKit/Quaternius building models in the 4 districts at WorldConfig positions.
+5. **Notice Board UI**: World-space canvas on Central Plaza showing top-5 leaderboard per game.
+6. **Test multiplayer flow**: Hit Play, ensure UGS initialises, Relay+Lobby connect, second player can join.
+
+*Last updated: Session 8 — HomeScene fully wired (all Inspector refs), SpawnPoint tagged, WorldConfig verified.*
+
+### Session 9 — Ambient Music System + Viking Village Water Fix
+
+#### Viking Village Water (WaterSystemFeature.cs)
+- `RenderTargetHandle` → `RTHandle` migration for Unity 6 / URP 17 compatibility
+- `cmd.GetTemporaryRT` → `RenderingUtils.ReAllocateIfNeeded`
+- `ConfigureTarget(m_WaterFX.Identifier())` → `ConfigureTarget(m_WaterFX)`
+- `cmd.ReleaseTemporaryRT` → `m_WaterFX?.Release(); m_WaterFX = null` in `OnCameraCleanup`
+
+#### Ambient Music System
+**Architecture:**
+- `AmbientMusicManager.cs` — DontDestroyOnLoad singleton, persists Landing → WelcomeInit, fades out when HomeScene loads
+- `HomeAmbientManager.cs` — HomeScene-only, picks random track from pool each session, never repeats same track twice in a row
+
+**Current audio asset:**
+- `Assets/_NEREON/Sounds/Marconi Union - Weightless (253 Edit) (The Ambient Zone).mp3`
+- Used for ALL scenes now (one track). Add more tracks to the arrays as more music is acquired.
+
+**Volume settings:**
+- LandingScene/WelcomeInit: `targetVolume = 0.4`, `fadeIn = 2s`, `fadeOut = 2s`
+- HomeScene: `targetVolume = 0.35`, `fadeIn = 3s`, `loopCurrentTrack = true` (single track loops; set false when multiple tracks added)
+
+**Setup (one-time):**
+Run **NEREON → Setup → Wire Ambient Music** from Unity menu bar.
+This Editor script (`NereonAmbientMusicSetup.cs`) will:
+1. Open LandingScene → create `AmbientMusicManager` GO → wire `landingTracks[0]` = Weightless → save
+2. Open WelcomeInitScene → remove any stale `AmbientMusicManager` GO (manager persists from Landing) → save
+3. Open HomeScene → create `HomeAmbientManager` GO → wire `homeTracks[0]` = Weightless → save
+4. Restore your original scene
+
+**Adding more home tracks later:**
+Select `HomeAmbientManager` GO in HomeScene Inspector → expand `homeTracks` array → add more AudioClips.
+Set `loopCurrentTrack = false` so it auto-advances to next random track when one ends.
+
+*Last updated: Session 9 — Viking Village water fixed, ambient music system implemented.*
