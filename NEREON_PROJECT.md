@@ -224,9 +224,9 @@ HomeScene
 - [x] `NereonClient.cs` at `Assets/_NEREON/Scripts/generated/`
 - [x] Verified `NereonClient.cs` — PDA derivation, all discriminators, all instruction builders correct
 
-### Phase 4 — Replace PlayerPrefs (Login Flow)
-- [ ] `LoginFlowController` → async RPC check if `UserProfile` PDA exists
-- [ ] `WelcomeInitController` → send real `initialize_user` transaction
+### Phase 4 — Replace PlayerPrefs (Login Flow) ✅ COMPLETE
+- [x] `LoginFlowController` → async RPC check if `UserProfile` PDA exists
+- [x] `WelcomeInitController` → send real `initialize_user` transaction
 
 ### Phase 5 — Town Hub World
 - [x] All hub world scripts written (HomeSceneManager, PlayerHUD, MiniGamePortal, WorldConfig, BuildingInteraction, etc.)
@@ -369,9 +369,11 @@ Unity MCP server (`mcp-for-unity-server v2.14.1`) is running at `http://localhos
 - [x] `com.solana.unity_sdk` already in manifest
 - [x] `NereonClient.cs` verified — all PDA seeds, discriminators, account layouts, instruction builders confirmed correct vs deployed IDL
 
-### Phase 4 — Replace PlayerPrefs (Login Flow)
-- [ ] `LoginFlowController` → async RPC PDA existence check (replace PlayerPrefs)
-- [ ] `WelcomeInitController` → send real `initialize_user` transaction
+### Phase 4 — Replace PlayerPrefs (Login Flow) ✅ COMPLETE
+- [x] `LoginFlowController` → async RPC `IsUserInitializedAsync()` — zero PlayerPrefs, pure on-chain routing
+- [x] `WelcomeInitController` → sends real `initialize_user` transaction; PlayerPrefs write is display cache only (post-confirm)
+- [x] `HomeSceneManager` → fetches on-chain first (4 retries); PlayerPrefs is fallback display cache, overwritten by on-chain data
+- No core decisions (routing, identity, game state) rely on PlayerPrefs ✅ Seeker-compliant
 
 ### Phase 5 — Town Hub World (Scenes Built ✅)
 - [x] All hub world scripts written (HomeSceneManager, PlayerHUD, MiniGamePortal, etc.)
@@ -440,7 +442,7 @@ Unity MCP server (`mcp-for-unity-server v2.14.1`) is running at `http://localhos
 
 ---
 
-*Last updated: Session 6 — anchor deploy ✅, NereonClient.cs verified ✅ (Phase 2 + 3 complete)*
+*Last updated: Session 6 — anchor deploy ✅, NereonClient.cs verified ✅, Phase 4 confirmed complete ✅ (Phases 1–4 all done)*
 
 ---
 
