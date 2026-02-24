@@ -209,14 +209,14 @@ HomeScene
 - [x] Install Rust, Solana CLI, Anchor CLI (`avm`)
 - [x] Create deploy keypair, fund on Devnet
 
-### Phase 2 — Anchor Program ✅ COMPLETE (deploy pending)
+### Phase 2 — Anchor Program ✅ COMPLETE
 - [x] `UserProfile` + `CharacterStats` + `GameLeaderboard` accounts
 - [x] `initialize_user` instruction
 - [x] `update_profile` instruction
 - [x] `submit_score` + XP award logic + top-5 leaderboard
 - [x] `distribute_monthly_rewards` instruction
 - [x] `anchor build` → IDL generated at `anchor/target/idl/nereon.json`
-- [ ] `anchor deploy` → confirm Devnet Program ID live
+- [x] `anchor deploy` → **Program ID `4cPPQDNMuwNnXRaNHxvo2gyDhwue1bE8MLzSW3VqcS4o`** live on Devnet
 
 ### Phase 3 — Unity ↔ Anchor Bridge
 - [x] `com.solana.unity_sdk` in manifest (MagicBlock)
@@ -302,13 +302,28 @@ Unity MCP server (`mcp-for-unity-server v2.14.1`) is running at `http://localhos
 
 ## ✅ Work Completed
 
+### Session — 2026-02-24 (Session 6)
+
+#### Anchor Deploy
+- Ran `anchor deploy --provider.cluster devnet`
+- **Program ID confirmed live:** `4cPPQDNMuwNnXRaNHxvo2gyDhwue1bE8MLzSW3VqcS4o`
+- IDL Account: `5aUkwLTHGoVYvB71Xzm6CS1V4vjBCt9RjvqqnuUEeDqc`
+- Deploy slot: 444407275 | Upgrade authority: `GEsk7ishSsqmKebunMUWcPeV3GWfh2CpnLa6ErhMeZsh`
+- Balance remaining: ~6.36 SOL (deploy cost ~1.81 SOL held in program data account)
+- Phase 2 now **fully complete** ✅
+
+---
+
 ### Session — 2026-02-24
 
 #### Anchor Program
 - Verified `lib.rs` is **fully complete**: `initialize_user`, `update_profile`, `submit_score`, `distribute_monthly_rewards`, all PDAs, events, errors.
 - **`anchor build` succeeded** → IDL generated at `anchor/target/idl/nereon.json`
 - IDL copied to `Assets/_NEREON/IDL/nereon.json` ✅
-- Deploy to Devnet still pending (next session: `anchor deploy`)
+- **`anchor deploy` succeeded** → Program live on Devnet ✅
+  - Program ID: `4cPPQDNMuwNnXRaNHxvo2gyDhwue1bE8MLzSW3VqcS4o`
+  - IDL Account: `5aUkwLTHGoVYvB71Xzm6CS1V4vjBCt9RjvqqnuUEeDqc`
+  - Deploy slot: 444407275 | Upgrade authority: wallet `GEsk7ish...`
 
 #### Unity Project Audit (via MCP)
 - **LandingScene**: Fixed — removed duplicate `LoginManager` GameObject (had redundant `LoginFlowController`). Now has exactly one `LoginFlowController`. ✅
@@ -344,9 +359,9 @@ Unity MCP server (`mcp-for-unity-server v2.14.1`) is running at `http://localhos
 ## 🗺️ Roadmap
 
 ### Phase 1 — Toolchain ✅ COMPLETE
-### Phase 2 — Anchor Program ✅ COMPLETE (deploy pending)
+### Phase 2 — Anchor Program ✅ COMPLETE
 - [x] All instructions written and compiled
-- [ ] `anchor deploy` → Devnet Program ID confirmed on-chain
+- [x] `anchor deploy` → **Program ID: `4cPPQDNMuwNnXRaNHxvo2gyDhwue1bE8MLzSW3VqcS4o`** live on Devnet (slot 444407275)
 
 ### Phase 3 — Unity ↔ Anchor Bridge
 - [x] IDL generated and copied to `Assets/_NEREON/IDL/nereon.json`
@@ -424,7 +439,7 @@ Unity MCP server (`mcp-for-unity-server v2.14.1`) is running at `http://localhos
 
 ---
 
-*Last updated: Session 5 — anchor build ✅, IDL in Unity ✅, all scenes audited ✅, UGS billing activated ✅*
+*Last updated: Session 6 — anchor deploy ✅ Program live on Devnet (4cPPQDNMuwNnXRaNHxvo2gyDhwue1bE8MLzSW3VqcS4o)*
 
 ---
 
