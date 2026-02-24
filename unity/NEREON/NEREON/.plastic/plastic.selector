@@ -1,4 +1,0 @@
-repository "NEREON/NEREON@6872809386046@cloud"
-  path "/"
-    br "/main"
-    co "/main"
