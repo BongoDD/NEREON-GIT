@@ -218,11 +218,11 @@ HomeScene
 - [x] `anchor build` → IDL generated at `anchor/target/idl/nereon.json`
 - [x] `anchor deploy` → **Program ID `4cPPQDNMuwNnXRaNHxvo2gyDhwue1bE8MLzSW3VqcS4o`** live on Devnet
 
-### Phase 3 — Unity ↔ Anchor Bridge
+### Phase 3 — Unity ↔ Anchor Bridge ✅ COMPLETE
 - [x] `com.solana.unity_sdk` in manifest (MagicBlock)
 - [x] IDL at `Assets/_NEREON/IDL/nereon.json`
-- [x] `NereonClient.cs` generated at `Assets/_NEREON/Scripts/generated/`
-- [ ] Verify `NereonClient.cs` — PDA derivation, all instruction builders correct
+- [x] `NereonClient.cs` at `Assets/_NEREON/Scripts/generated/`
+- [x] Verified `NereonClient.cs` — PDA derivation, all discriminators, all instruction builders correct
 
 ### Phase 4 — Replace PlayerPrefs (Login Flow)
 - [ ] `LoginFlowController` → async RPC check if `UserProfile` PDA exists
@@ -311,6 +311,7 @@ Unity MCP server (`mcp-for-unity-server v2.14.1`) is running at `http://localhos
 - Deploy slot: 444407275 | Upgrade authority: `GEsk7ishSsqmKebunMUWcPeV3GWfh2CpnLa6ErhMeZsh`
 - Balance remaining: ~6.36 SOL (deploy cost ~1.81 SOL held in program data account)
 - Phase 2 now **fully complete** ✅
+- **`NereonClient.cs` verified** — all PDA seeds, discriminators (SHA256 confirmed), account layouts, and instruction builders match the deployed IDL exactly. Phase 3 **fully complete** ✅
 
 ---
 
@@ -363,10 +364,10 @@ Unity MCP server (`mcp-for-unity-server v2.14.1`) is running at `http://localhos
 - [x] All instructions written and compiled
 - [x] `anchor deploy` → **Program ID: `4cPPQDNMuwNnXRaNHxvo2gyDhwue1bE8MLzSW3VqcS4o`** live on Devnet (slot 444407275)
 
-### Phase 3 — Unity ↔ Anchor Bridge
+### Phase 3 — Unity ↔ Anchor Bridge ✅ COMPLETE
 - [x] IDL generated and copied to `Assets/_NEREON/IDL/nereon.json`
 - [x] `com.solana.unity_sdk` already in manifest
-- [ ] Verify/finalize `NereonClient.cs` (PDA derivation + instruction builders)
+- [x] `NereonClient.cs` verified — all PDA seeds, discriminators, account layouts, instruction builders confirmed correct vs deployed IDL
 
 ### Phase 4 — Replace PlayerPrefs (Login Flow)
 - [ ] `LoginFlowController` → async RPC PDA existence check (replace PlayerPrefs)
@@ -439,7 +440,7 @@ Unity MCP server (`mcp-for-unity-server v2.14.1`) is running at `http://localhos
 
 ---
 
-*Last updated: Session 6 — anchor deploy ✅ Program live on Devnet (4cPPQDNMuwNnXRaNHxvo2gyDhwue1bE8MLzSW3VqcS4o)*
+*Last updated: Session 6 — anchor deploy ✅, NereonClient.cs verified ✅ (Phase 2 + 3 complete)*
 
 ---
 
