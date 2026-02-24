@@ -97,23 +97,37 @@ public class HomeSceneManager : MonoBehaviour
         {
             var wallet = Web3.Account.PublicKey;
 
-            var statsTask   = NereonClient.FetchCharacterStatsAsync(wallet);
-            var profileTask = NereonClient.FetchUserProfileAsync(wallet);
-            await UniTask.WhenAll(statsTask, profileTask);
-
-            CachedStats   = statsTask.GetAwaiter().GetResult();
-            CachedProfile = profileTask.GetAwaiter().GetResult();
+            // WhenAll returns a tuple — do NOT call GetAwaiter().GetResult() after this
+            (CachedStats, CachedProfile) = await UniTask.WhenAll(
+                NereonClient.FetchCharacterStatsAsync(wallet),
+                NereonClient.FetchUserProfileAsync(wallet));
 
             if (CachedStats == null)
             {
-                Debug.LogWarning("[HomeSceneManager] CharacterStats not found — redirecting to WelcomeInit.");
-                SceneManager.LoadScene("WelcomeInitScene");
-                return;
-            }
+                // Not yet on-chain — try local PlayerPrefs fallback (set by WelcomeInitController)
+                byte avatarId = (byte)UnityEngine.PlayerPrefs.GetInt("NEREON_AvatarId", 0);
+                string username = UnityEngine.PlayerPrefs.GetString("NEREON_Username", "Adventurer");
 
-            CachedUsername = CachedProfile.HasValue
-                ? NereonClient.DecodeUsername(CachedProfile.Value.Username)
-                : "Adventurer";
+                if (UnityEngine.PlayerPrefs.HasKey("NEREON_Username"))
+                {
+                    Debug.LogWarning("[HomeSceneManager] On-chain data not found — using local PlayerPrefs fallback.");
+                    CachedStats   = new CharacterStatsData { Level = 1, Xp = 0 };
+                    CachedProfile = new UserProfileData { AvatarId = avatarId };
+                    CachedUsername = username;
+                }
+                else
+                {
+                    Debug.LogWarning("[HomeSceneManager] No on-chain data and no local fallback — redirecting to WelcomeInit.");
+                    UnityEngine.SceneManagement.SceneManager.LoadScene("WelcomeInitScene");
+                    return;
+                }
+            }
+            else
+            {
+                CachedUsername = CachedProfile.HasValue
+                    ? NereonClient.DecodeUsername(CachedProfile.Value.Username)
+                    : "Adventurer";
+            }
 
             // Update HUD
             _hud?.Refresh(CachedUsername, CachedStats.Value.Level, CachedStats.Value.Xp);

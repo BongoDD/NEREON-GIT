@@ -125,11 +125,18 @@ public class WelcomeSceneFlow : MonoBehaviour
         var username = _usernameInput != null ? _usernameInput.text.Trim() : "Adventurer";
         if (!ValidateUsername(username)) return;
 
+        byte avatarId = _avatarSelector != null ? _avatarSelector.SelectedAvatarId : (byte)0;
+
         if (_txController != null)
         {
-            _txController.AvatarId = _avatarSelector != null ? _avatarSelector.SelectedAvatarId : (byte)0;
+            _txController.AvatarId = avatarId;
             _txController.Username = username;
         }
+
+        // Save locally so HomeScene can load avatar even if chain tx hasn't confirmed
+        PlayerPrefs.SetInt("NEREON_AvatarId", avatarId);
+        PlayerPrefs.SetString("NEREON_Username", username);
+        PlayerPrefs.Save();
 
         TransitionAsync(_panelNameEntry, _panelConfirming).Forget();
         _txController?.CompleteSetup();

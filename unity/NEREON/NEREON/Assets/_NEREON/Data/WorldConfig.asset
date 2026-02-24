@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 73ff0fe2d907b9c4c80a1354c8be0dc8, type: 3}
+  m_Name: WorldConfig
+  m_EditorClassIdentifier: Assembly-CSharp::WorldConfig
+  Buildings:
+  - GameId: 0
+    DisplayName: The Coin Flip
+    Description: A luck-and-prediction game. Flip the on-chain coin and call it.
+    District: 1
+    MiniGameScene: MiniGame_CoinFlip
+    MinLevelRequired: 1
+    WorldPosition: {x: -55, y: 0, z: -25}
+  - GameId: 1
+    DisplayName: The Card Table
+    Description: Skill-based card game with a luck draw element.
+    District: 1
+    MiniGameScene: MiniGame_CardTable
+    MinLevelRequired: 1
+    WorldPosition: {x: -35, y: 0, z: -55}
+  - GameId: 2
+    DisplayName: The Puzzle Tower
+    Description: "A multilayer puzzle \u2014 fastest solves win the leaderboard."
+    District: 2
+    MiniGameScene: MiniGame_PuzzleTower
+    MinLevelRequired: 3
+    WorldPosition: {x: 45, y: 0, z: 55}
+  - GameId: 3
+    DisplayName: The Oracle
+    Description: "A mystical on-chain VRF ritual \u2014 high risk, high score potential."
+    District: 2
+    MiniGameScene: MiniGame_Oracle
+    MinLevelRequired: 5
+    WorldPosition: {x: 65, y: 0, z: 30}
+  - GameId: 4
+    DisplayName: The Arena
+    Description: High-score action game. Only the best earn a spot on the podium.
+    District: 3
+    MiniGameScene: MiniGame_Arena
+    MinLevelRequired: 8
+    WorldPosition: {x: 55, y: 0, z: -50}
+  SpawnPoint: {x: 0, y: 0, z: 0}
+  SpawnFacingYaw: 0

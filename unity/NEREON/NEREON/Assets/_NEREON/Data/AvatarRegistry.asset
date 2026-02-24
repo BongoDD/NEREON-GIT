@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3074ea3e8290e24ba86961d56f51b72, type: 3}
+  m_Name: AvatarRegistry
+  m_EditorClassIdentifier: Assembly-CSharp::AvatarRegistry
+  Avatars:
+  - AvatarId: 0
+    DisplayName: FIRE
+    Description: Fierce and relentless. Burns with passion and raw power.
+    Prefab: {fileID: 1298448752696192821, guid: 0a3bbff871587eb479185eec9e9c9512, type: 3}
+    PreviewImage: {fileID: 0}
+  - AvatarId: 1
+    DisplayName: WATER
+    Description: Fluid and adaptive. Flows through every challenge.
+    Prefab: {fileID: 7265010456853367930, guid: 7738e4b8685f5ab4b8e139e627652a09, type: 3}
+    PreviewImage: {fileID: 0}
+  - AvatarId: 2
+    DisplayName: EARTH
+    Description: Grounded and enduring. Stands firm against all odds.
+    Prefab: {fileID: 6575813803008651872, guid: 7d88c1bc80a308542a0d117a670fa2f5, type: 3}
+    PreviewImage: {fileID: 0}
+  - AvatarId: 3
+    DisplayName: AIR
+    Description: Swift and untouchable. Moves faster than thought.
+    Prefab: {fileID: 1137596523383158151, guid: 338afc9b5111fa141af440970f1ff913, type: 3}
+    PreviewImage: {fileID: 0}
