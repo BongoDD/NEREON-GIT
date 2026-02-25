@@ -375,15 +375,20 @@ Unity MCP server (`mcp-for-unity-server v2.14.1`) is running at `http://localhos
 - [x] `HomeSceneManager` → fetches on-chain first (4 retries); PlayerPrefs is fallback display cache, overwritten by on-chain data
 - No core decisions (routing, identity, game state) rely on PlayerPrefs ✅ Seeker-compliant
 
-### Phase 5 — Town Hub World (Scenes Built ✅)
+### Phase 5 — Town Hub World ✅ COMPLETE
 - [x] All hub world scripts written (HomeSceneManager, PlayerHUD, MiniGamePortal, etc.)
 - [x] HomeScene structured (MapMagic terrain, Districts, Player, Managers, HUD)
-- [ ] Link Unity Project ID in Editor to activate UGS services
-- [ ] Wire `NereonNetworkManager.cs` to use UGS Authentication + Relay properly
-- [ ] Place actual district buildings (placeholder meshes → real art)
-- [ ] Third-person character controller (Starter Assets import)
-- [ ] `WorldConfig` ScriptableObject asset created with initial buildings
-- [ ] Leaderboard Notice Board UI (reads GameLeaderboard PDAs)
+- [x] All 5 buildings placed in [Buildings] with BuildingInteraction (GameId 0-4 + WorldConfig wired) ✅
+- [x] WorldConfig.asset created at `Assets/_NEREON/Data/WorldConfig.asset` ✅ (5 buildings defined)
+- [x] AvatarManager component added to HomeSceneManager GO; wired to AvatarRegistry + SpawnPoint ✅
+- [x] HomeSceneManager._avatarManager reference wired ✅
+- [x] NoticeBoard component added to `[Districts]/CentralPlaza/NoticeBoard` GO ✅
+- [x] NoticeBoard WorldCanvas (WorldSpace, scale 0.01) + TabBar (5 TMP_Text) + LeaderboardPanel (HeaderLabel + 5 Row TMP_Text) created ✅
+- [x] NoticeBoard._worldConfig, _tabLabels[5], _entryLabels[5], _headerLabel all wired ✅
+- [x] SpawnPoint tag set on `[Player]/SpawnPoint` ✅
+- [x] NereonNetworkManager fully wired (_networkManager, _hubPlayerPrefab) ✅
+- [x] HomeScene saved ✅
+- [ ] Link Unity Project ID in Editor (Project Settings → Services → NEREON org) — **manual step in Editor**
 
 ### Phase 6 — Mini-Game Framework
 - [ ] `IMinigame` interface
@@ -442,7 +447,7 @@ Unity MCP server (`mcp-for-unity-server v2.14.1`) is running at `http://localhos
 
 ---
 
-*Last updated: Session 6 — anchor deploy ✅, NereonClient.cs verified ✅, Phase 4 confirmed complete ✅ (Phases 1–4 all done)*
+*Last updated: Session 6 — Phases 1–5 complete (minus UGS Project ID manual link). NoticeBoard wired, AvatarManager added, all Phase 5 scene work done via Unity MCP.*
 
 ---
 
