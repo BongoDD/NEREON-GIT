@@ -207,7 +207,7 @@ content_copy
 Create biome assets: NEREON → Create World Variant Assets
 
 Floating Name Tag — PlayerWorldUI.cs
-World-space canvas child of the avatar root. Billboard (always faces camera).
+World-space canvas child of the avatar root. Screen-parallel billboard.
 
 No background panel — plain text only, transparent world-space canvas
 Name: white, bold, 22pt, horizontally centered, full canvas width
@@ -215,6 +215,10 @@ Level: blue-tinted, 13pt, centered just below name
 Height above avatar root: 2.1 m (close above head)
 Chat bubble: shown on ShowMessage(), auto-hides after 10s, no background
 Built entirely at runtime — no prefab needed
+Billboard behaviour: transform.rotation = _cam.rotation — the canvas copies the
+  camera's exact rotation so it is always perfectly flat/parallel to the screen.
+  No pitch or tilt regardless of camera height or angle. Same technique used by
+  WoW, GW2, FFXIV and all major MMORPGs for stable name plates.
 ⚠️ FloatingNameTag.cs is an older, simpler alternative that still exists in the project.
 Use PlayerWorldUI for all new work. AvatarManager creates PlayerWorldUI, not FloatingNameTag.
 
