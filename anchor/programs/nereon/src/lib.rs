@@ -116,6 +116,17 @@ pub mod nereon {
         Ok(())
     }
 
+    // ── close_user_accounts ───────────────────────────────────────────────────
+    /// Dev / testing helper: closes both UserProfile and CharacterStats PDAs,
+    /// returning rent lamports to the authority.
+    /// Only the owning wallet can call this — the `has_one` + `close` constraints
+    /// on the accounts context enforce this automatically.
+    pub fn close_user_accounts(_ctx: Context<CloseUserAccounts>) -> Result<()> {
+        // Anchor's `close = authority` attribute handles everything:
+        // zeroes account data, transfers lamports, reassigns owner to System Program.
+        Ok(())
+    }
+
     // ── distribute_monthly_rewards ────────────────────────────────────────────
     /// Mark a monthly leaderboard as rewards distributed (callable by anyone).
     /// Emits the winners list so an off-chain keeper can transfer tokens.
@@ -224,7 +235,31 @@ pub struct DistributeRewards<'info> {
     pub caller: Signer<'info>,
 }
 
-// ─── Account Structs ──────────────────────────────────────────────────────────
+// ─── Account Structs ───────────────────────────────────────────────────────────
+
+#[derive(Accounts)]
+pub struct CloseUserAccounts<'info> {
+    #[account(
+        mut,
+        seeds   = [b"user_profile", authority.key().as_ref()],
+        bump    = user_profile.bump,
+        has_one = authority,
+        close   = authority
+    )]
+    pub user_profile: Account<'info, UserProfile>,
+
+    #[account(
+        mut,
+        seeds   = [b"character", authority.key().as_ref()],
+        bump    = character_stats.bump,
+        has_one = authority,
+        close   = authority
+    )]
+    pub character_stats: Account<'info, CharacterStats>,
+
+    #[account(mut)]
+    pub authority: Signer<'info>,
+}
 
 #[account]
 #[derive(InitSpace)]
