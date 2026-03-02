@@ -1,7 +1,7 @@
 NEREON — Project Bible
 Single source of truth. Read this before every session.
 Every Copilot session, every developer decision, every architecture change is reflected here.
-Last updated: Session 12 — 2026-02-27
+Last updated: Session 16 — 2026-03-02 (NetworkManager null guard, camera black-overlay fix, cinematic descent fix, auth stack)
 
 🎯 The Vision
 NEREON is a restricted open-world, third-person online RPG built entirely on the Solana blockchain.
@@ -82,13 +82,17 @@ WelcomeInitScene (build index 3)
 
 HomeScene (build index 4)
   └─ HomeSceneManager.InitialiseAsync()
-        └─ FadeOverlay fades from black → 0 (0.6s)
+        └─ _fadeOverlay alpha=1 (world hidden during load)
+        └─ _statusText shows loading steps: "Fetching character…" → "Spawning avatar…" → "Welcome, {name}!"
         └─ NereonClient.FetchCharacterStatsAsync() + FetchUserProfileAsync() (4 retries)
         └─ AvatarManager.LoadAvatarAsync() — spawns Invector avatar at SpawnPoint
         └─ SkyboxController.Apply(WorldVariant.skyboxMaterial)
         └─ HomeSceneCinematic.PlayAsync() — optional bird-eye → player sweep
         └─ NereonNetworkManager.ConnectAsync() — UGS Relay+Lobby, NGO multiplayer
         └─ PlayerInput unlocked, player in control
+        └─ FadeOverlay fades to 0 LAST — world only revealed after all data loaded + avatar spawned
+  ⚠️ Session 13 fix: FadeOutAsync(_fadeOverlay) moved from START → END of InitialiseAsync().
+     World was previously visible for 6+ seconds while data loaded — now stays black until ready.
 
 LeaderboardScene (build index TBD)
   └─ Accessed from HomeScene options menu → "Leaderboards"
@@ -116,30 +120,37 @@ Scene Transitions — SceneLoader
 SceneLoader is a DontDestroyOnLoad singleton:
 
 Fades screen to solid black (0.3s) → loads scene async with ThreadPriority.High → fades back in (0.4s)
-Spinner visible during load
+Spinner + "LOADING..." label (dot animation) visible during load
+Post-activation frame wait: 15 frames (was 4) to survive Unity's main-thread shader compilation stall
 No prefab dependency — built entirely in code; nothing to wire in Inspector
 Call from anywhere: SceneLoader.Load("HomeScene")
+⚠️ Session 13 fix: Spinner was freezing because Unity's scene activation stall blocks Update().
+   Frame buffer increased from 4 → 15. LOADING... label with animated dots added below spinner.
 🎮 Current Architecture (What Is Actually Built)
 Camera — SimpleFollowCamera.cs
 Attached to Main Camera in HomeScene. No Cinemachine dependency.
+Fixed overhead camera — MU Dark Awakening style. The camera is locked at a fixed pitch and yaw; it does NOT rotate with player input.
 
 Field	Default	Description
-_followDistance	5 m	Distance behind player
-_heightOffset	1.5 m	Vertical shift above camera target
-_smoothSpeed	12	Position lerp speed
-_lookAheadY	0.8	Upward look bias (player centred on screen)
-_minDistance	1.5 m	Closest zoom distance (scroll wheel)
-_maxDistance	12 m	Furthest zoom distance (scroll wheel)
-_zoomSpeed	2	Scroll wheel sensitivity
+_pitchAngle	55°	Degrees above horizon looking down (50-60 = MU DA feel)
+_yawAngle	45°	World-space compass angle the camera orbits FROM
+_followDist	10 m	Orbital distance from player
+_lookOffsetY	1.2 m	Aim height above player feet
+_smoothSpeed	10	Position lerp speed
+_minDist	5 m	Closest zoom distance (scroll wheel)
+_maxDist	20 m	Furthest zoom distance (scroll wheel)
+_zoomSpeed	4	Scroll wheel sensitivity
 
 content_copy
-Scroll wheel zooms the camera in/out, always keeping the player in focus.
-Follows PlayerCameraRoot child on the player (set by Invector controller rotation).
+Scroll wheel zooms in/out. Camera tracks player root (NOT PlayerCameraRoot — the fixed camera ignores Invector's free-rotate target).
 SphereCast pulls the camera forward if geometry is between it and the player.
 
 ⚠️ Cinemachine is installed (com.unity.cinemachine 3.1.2) but is NOT used for
 the main player follow camera. It exists for assets that depend on it (3DGamekitLite, etc.).
 Do NOT add Cinemachine Virtual Cameras for the player — SimpleFollowCamera handles it.
+
+⚠️ PlayerCameraRoot is still present on avatar prefabs (Invector requires it) but SimpleFollowCamera
+no longer uses it. The camera now follows the player's root transform with a fixed orbital angle.
 
 Character Controller — Invector Third Person Controller
 The player avatar uses the Invector locomotion system (vThirdPersonInput, vThirdPersonController,
@@ -207,18 +218,14 @@ content_copy
 Create biome assets: NEREON → Create World Variant Assets
 
 Floating Name Tag — PlayerWorldUI.cs
-World-space canvas child of the avatar root. Screen-parallel billboard.
+Screen-space name tag above every player (local + remote). Built entirely at runtime — no prefab needed.
 
-No background panel — plain text only, transparent world-space canvas
-Name: white, bold, 22pt, horizontally centered, full canvas width
-Level: blue-tinted, 13pt, centered just below name
-Height above avatar root: 2.1 m (close above head)
-Chat bubble: shown on ShowMessage(), auto-hides after 10s, no background
-Built entirely at runtime — no prefab needed
-Billboard behaviour: transform.rotation = _cam.rotation — the canvas copies the
-  camera's exact rotation so it is always perfectly flat/parallel to the screen.
-  No pitch or tilt regardless of camera height or angle. Same technique used by
-  WoW, GW2, FFXIV and all major MMORPGs for stable name plates.
+Render mode: ScreenSpaceOverlay canvas (sortingOrder=50) — NOT world-space.
+Positioning: Camera.WorldToScreenPoint(avatar.position + up*2.2m) → RectTransformUtility.ScreenPointToLocalPointInRectangle() → _namePanelRT.localPosition
+Pivot: (0.5, 0) on name panel — tag sits above the projected head point.
+Name: white, bold, 15pt; Level: light-blue, 12pt; both in a dark semi-transparent 170×32 panel.
+Chat bubble (190×50): shown on ShowMessage(), auto-hides after 10s + 1s fade.
+⚠️ Always flat 2D — never tilts at any camera angle. Do NOT revert to world-space canvas or transform.rotation = _cam.rotation.
 ⚠️ FloatingNameTag.cs is an older, simpler alternative that still exists in the project.
 Use PlayerWorldUI for all new work. AvatarManager creates PlayerWorldUI, not FloatingNameTag.
 
@@ -547,6 +554,22 @@ Ambient music, cinematic intro, bubble chat
  Wire WorldSyncManager in HomeScene Inspector
  Place Notice Board 3D prop near SpawnPoint with world-space leaderboard canvas
  Test multiplayer: 2 clients same lobby → same terrain → chat working
+ ✅ Fix SceneLoader spinner freeze (frame buffer 4→15 + LOADING... label)
+ ✅ Fix HomeSceneManager loading order (FadeOverlay moved to end; status text steps)
+ ✅ Fix PlayerWorldUI billboard tilt (cylindrical Y-axis; no camera-pitch copy)
+ ✅ Redesign SimpleFollowCamera to fixed overhead (MU Dark Awakening style; pitch=55, yaw=45)
+ ✅ Redesign PlayerHUD (dark panel, gold portrait ring, level badge, XP fill bar)
+ ✅ Redesign MobileHUDCanvas (circular buttons + visible joystick ring/knob + toon colour palette)
+ ✅ Fix PlayerHUD anchor — panel appearing center-screen (removed `if (_usernameText == null)` guard; always calls BuildPanel(); also destroys pre-existing canvas child to prevent duplicates)
+ ✅ Fix PlayerWorldUI scale — CanvasScale 0.01→0.005, _heightOffset 2.1→1.0, name font 22→14pt, level font 13→10pt
+ ✅ Fix SimpleFollowCamera to use PlayerSetup.LocalPlayer (not FindWithTag — no more remote player lock in multiplayer)
+ ✅ Fix AvatarManager vThirdPersonCamera conflict — NereonCameraSetup component added to local player; PlayerSetup.WireCinemachineCamera() now disables instead of wires; vThirdPersonInput.tpCamera nulled + lockCameraInput=true; 3-layer defence against frame-timing races
+ ✅ Fix AudioListener duplicate warning — NereonCameraSetup now removes AudioListener from player in Start() (player prefab has one, Main Camera has one → was causing "2 audio listeners" warning)
+ ✅ Fix WASD editor movement — NereonMobileInput keyboard fallback now runs before _active guard; movement injection also runs before guard; WASD works from first frame in editor without waiting for MobileHUDCanvas to link
+ ✅ Fix PlayerHUD world-space inheritance bug — PlayerHUDCanvas was parented to PlayerHUD GO (inside [HUD Canvas] WorldSpace Canvas); Unity inherited WorldSpace render mode, making panel appear wrong position/size. Fixed by creating PlayerHUDCanvas as scene-root GO (no parent). Tracked via _canvasGO field, destroyed in OnDestroy().
+ ✅ Fix camera "too far" — SimpleFollowCamera defaults tuned: _pitchAngle 55→45 (more forward-facing, character more visible), _followDist 10→6 (closer final view), _introStartDist 60→100 (dramatic zoom-in), _introZoomTime 2.5→3s, _lookOffsetY 1.2→1.5 (aim at torso/head)
+ 🔧 Wire Fantasy Wooden GUI sprites into PlayerHUD + MobileHUDCanvas via [SerializeField] fields
+ 🔧 True circular button shapes (runtime Texture2D circle sprites, or Fantasy Wooden GUI sprites)
 🔲 Phase 6 — Mini-Game Framework + Leaderboards
  IMinigame interface + scene template
  Score submission flow → submit_score tx → XP + level-up feedback UI
@@ -582,6 +605,12 @@ InvariantCulture	NereonCultureEnforcer.cs forces InvariantCulture on all threads
 MapMagic 2 removed	Terrain is now hand-crafted. Do NOT add MapMagic or any procedural terrain generation back.
 Starter Assets removed	Invector is the sole character controller. Do NOT add Unity Starter Assets ThirdPersonController.
 Invector is backbone	All player movement, actions, and mobile input flow through Invector. NereonMobileInput.cs bridges touch UI to Invector.
+PlayerWorldUI cylindrical billboard	LateUpdate: lookDir = (canvasPos-camPos).withY(0); rotation = Quaternion.LookRotation(lookDir, up). NEVER use transform.rotation = _cam.rotation — copies camera pitch, canvas tilts at overhead angles.
+SimpleFollowCamera uses LocalPlayer	SimpleFollowCamera must resolve target via PlayerSetup.LocalPlayer first, NOT FindWithTag("Player") — FindWithTag can lock onto remote NGO players in multiplayer.
+NereonCameraSetup.cs — camera ownership component	Added to local player by AvatarManager. [DefaultExecutionOrder(5000)] runs AFTER vThirdPersonInput.Start(). Nulls tpCamera field, sets lockCameraInput=true, disables vThirdPersonCamera component. Also removes duplicate AudioListener from player. This is the definitive Invector camera kill — do not remove it.
+vThirdPersonInput re-enables camera on Start()	vThirdPersonInput.Start() → CharacterInit() coroutine → FindCamera() → SetMainTarget() → Init() — this re-wires vThirdPersonCamera even if we disabled it earlier. NereonCameraSetup at order 5000 is the correct kill because it runs AFTER vThirdPersonInput.Start() (order 0).
+AudioListener duplicate	Invector player prefab includes an AudioListener (so audio follows the character in third-person mode). Main Camera always has one too. NereonCameraSetup.Start() removes the player's AudioListener. Main Camera is authoritative because SimpleFollowCamera keeps it near the player.
+NereonMobileInput WASD in editor	_active starts false; Activate() is called by MobileHUDCanvas.TryLinkPlayer(). The WASD keyboard block and movement injection run BEFORE the _active guard so editor testing works from the first frame. Sprint/jump/action (below the guard) still require _active=true.
 
 content_copy
 💬 Key Decisions Log
@@ -601,6 +630,20 @@ Date	Decision	Reason
 2026-02-27	Starter Assets fully removed	Invector is the sole controller; no dual-controller confusion
 2026-02-27	Notice Board: current month only (in village)	3D prop near SpawnPoint; historical data in separate LeaderboardScene
 2026-02-27	LeaderboardScene: dedicated historical view	Separate scene for browsing past months, accessible from options menu
+2026-02-28	Fixed overhead camera (MU Dark Awakening style)	Pitch=55°, yaw=45°, follows player root (not PlayerCameraRoot); no runtime rotation; better spatial awareness in hub world
+2026-02-28	PlayerWorldUI: cylindrical Y-axis billboard	Replaces camera-rotation copy which caused canvas tilt at overhead angles; name tag now always world-upright
+2026-02-28	SceneLoader: 15-frame post-activation buffer	Prevents spinner freeze during Unity's main-thread shader compilation stall on scene activation
+2026-02-28	HomeSceneManager: FadeOverlay moved to end	World stays hidden until all on-chain data loaded + avatar spawned; prevents empty-world flash
+2026-02-28	NereonCameraSetup.cs created — definitive Invector camera kill	vThirdPersonInput.Start() re-wires vThirdPersonCamera after any earlier disable. NereonCameraSetup at DefaultExecutionOrder(5000) runs after all default-order Start() methods, nulls tpCamera ref, sets lockCameraInput=true, disables component. 3-layer defence: PlayerSetup (early disable) + NereonCameraSetup (late Start kill) + WireCameraToAvatarAsync (1-frame insurance pass).
+2026-02-28	PlayerWorldUI scale reduced (CanvasScale 0.005, heightOffset 1.0)	At overhead camera pitch=55° from 10m, 0.01 scale was too large. 0.005 + reduced font sizes gives clean compact tag.
+2026-02-28	SimpleFollowCamera prefers PlayerSetup.LocalPlayer	FindWithTag("Player") could lock onto a remote NGO player. Now resolves LocalPlayer first, fallback to FindWithTag only.
+2026-02-28	PlayerHUD always rebuilds in Awake()	Removed `if (_usernameText == null)` guard; always calls BuildPanel(). Destroys pre-existing canvas child first.
+2026-03-02	NereonCameraSetup removes player AudioListener	Player prefab has AudioListener (Invector default); Main Camera also has one → Unity "2 audio listeners" warning. Since SimpleFollowCamera keeps Main Camera near player, player's listener is redundant. Destroyed in NereonCameraSetup.Start().
+2026-03-02	NereonMobileInput WASD runs before _active guard	Editor testing convenience: keyboard movement works from first frame without waiting for MobileHUDCanvas to link. Sprint/jump/action remain guarded (require canvas link).
+2026-03-02	HomeSceneCinematic._blackFade alpha fixed in Awake	Was set to 1f (black) in Awake — if cinematic not wired in HomeSceneManager, PlayAsync() never runs and screen stays permanently black. Fixed: set to 0f in Awake. PlayAsync() sets it to 1f itself at Phase 0 start.
+2026-03-02	HomeSceneCinematic descent endPos fixed	Was using _cam.transform.rotation from orbital phase to compute follow-camera endPos — orbital rotation aims upward, giving an endPos above the player. Fixed: use Quaternion.Euler(45,45,0) * Vector3.back * 8 for a predictable close-up landing.
+2026-03-02	NereonNetworkManager async null-guard	async void methods + Unity async = race condition: object destroyed while awaiting Relay/Lobby → MissingReferenceException on resume. Fixed: IsAlive() check after every await in CreateLobbyAndHostAsync and JoinLobbyAsync.
+2026-03-02	Auth stack — NereonSessionManager + BiometricAuthManager	Session persistence (7-day expiry) via PlayerPrefs (public key + wallet type only — no private keys). Biometric gate uses OS BiometricPrompt on Android / LAContext on iOS — dApp never sees biometric data (Solana dApp Store policy compliant). LoginFlowController now shows "Welcome Back" panel for returning users.
 
 content_copy
 ❓ Open Questions
@@ -611,3 +654,11 @@ XP curve: how much XP per game? How many total levels?
 Art style reference: what games inspire the visual direction? (Stardew? Genshin? Animal Crossing?)
 On-chain randomness: Switchboard VRF or Orao VRF for coin-flip / oracle games?
 Will NPCs ever be added to the town? (quest givers, ambient characters)
+[Session 13] Exact desired UI layout positions — annotated screenshot referenced but fixes pending:
+  - PlayerHUD top-left: portrait ring + name + level badge + XP bar
+  - MobileHUDCanvas bottom-left: joystick; bottom-right: 3 circular ability/action buttons
+  - PlayerWorldUI: small floating name above head, not giant text filling sky
+  - Debug overlay (red markings in screenshot): to be removed in later phase
+[Session 13] Camera yaw angle (currently 45°) — should it be 0° (straight-behind) or remain diagonal?
+[Session 13] Fantasy Wooden GUI sprites — move to Resources/ or wire via [SerializeField] in Inspector?
+[Session 13] MobileHUDCanvas buttons — generate circle Texture2D at runtime, or rely on Fantasy Wooden GUI sprites?
