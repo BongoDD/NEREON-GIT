@@ -1,7 +1,7 @@
 NEREON — Project Bible
 Single source of truth. Read this before every session.
 Every Copilot session, every developer decision, every architecture change is reflected here.
-Last updated: Session 16 — 2026-03-02 (NetworkManager null guard, camera black-overlay fix, cinematic descent fix, auth stack)
+Last updated: Session 18 — 2026-03-02 (Toast notifications (NereonToastService), Pass NFT + Unity Ads architecture planned, Astrolab/Seeker feature set defined, skybox auto-init, BtnEnterNereon auto-wire confirmed, avatar physics params scaled)
 
 🎯 The Vision
 NEREON is a restricted open-world, third-person online RPG built entirely on the Solana blockchain.
@@ -204,6 +204,32 @@ based on (Year * 12 + Month) % 5 — automatically rotates monthly.
 ⚠️ The BlockadeLabs-SDK-Unity package is installed but the API integration was
 removed from the live code. SkyboxController now only calls RenderSettings.skybox = material.
 Do not add API-based skybox generation without explicit decision to do so.
+
+HomeScene skybox — auto-setup flow:
+  HomeSceneManager.Start() auto-creates SkyboxController if not in scene.
+  SkyboxController.ApplyDefault() priority order:
+    1. _defaultSkybox (Inspector) → applied immediately
+    2. fantasySkyDay (Inspector) → applied immediately
+    3. Resources.Load<Material>("Skyboxes/FS013_Day") → works in builds
+    4. AssetDatabase.LoadAssetAtPath (Editor-only) → auto-loads FS013_Day.mat
+    5. Procedural sky shader → final fallback
+
+  ✅ For Editor: works automatically (AssetDatabase loads FS013_Day in step 4).
+  ✅ For builds: run NEREON → Setup → Wire Skybox (Resources) ONCE.
+    Copies all FS013 variants → Assets/_NEREON/Resources/Skyboxes/
+    Also wires SkyboxController Inspector fields in the open scene.
+
+Fantasy Skybox FREE — FS013 variants (panoramic, URP-compatible):
+  FS013_Day.mat         → bright fantasy day sky (default)
+  FS013_Night.mat       → deep night, stars
+  FS013_Sunrise.mat     → golden morning
+  FS013_Sunset.mat      → warm amber dusk
+  FS013_Rainy.mat       → overcast / rain
+  FS013_Snowy.mat       → winter / snow
+  FS013_Day_Sunless.mat → cool overcast day
+  FS013_Night_Moonless.mat → moonless night
+
+Use SkyboxController.ApplyTimeOfDay("day"|"night"|"sunrise"|"sunset"|"rainy"|"snowy").
 
 5 Biomes:
 
@@ -475,6 +501,7 @@ NereonWelcomeSceneBuilder.cs	NEREON → Build WelcomeScene	WelcomeInitScene: 3-p
 NereonWorldBuilder.cs	NEREON → Create World Variant Assets	Creates 5 biome ScriptableObjects + WorldVariantRegistry
 NereonPlayerPrefabBuilder.cs	NEREON → Build Player Prefab	Creates Invector-based HubPlayer prefab
 NereonAvatarPrefabBuilder.cs	NEREON → Build Avatar Prefabs	Creates Fire/Water/Air/Earth avatar prefabs
+NereonSkyboxSetup.cs	NEREON → Setup → Wire Skybox (Resources)	Copies FS013 variants to Resources/Skyboxes/; wires SkyboxController Inspector fields
 NereonAmbientMusicSetup.cs	NEREON → Setup → Wire Ambient Music	Wires AudioClips to AmbientMusicManager and HomeAmbientManager
 NereonPackageFixer.cs	NEREON → Fix → ...	Various one-click fixes (avatar registry refs, bubble font, etc.)
 
@@ -528,6 +555,92 @@ Viking Village	✅ In project	Environment dressing, water shaders
 Invector Third Person Controller	✅ In project	Active player controller — backbone
 Toony Colors Pro 2	✅ In project	Toon shader
 DOTween Pro	✅ In project	UIAnimations.cs
+
+content_copy
+🎫 NEREON Pass NFT System (Seeker dApp Store Monetisation)
+Inspired by the "Astrolab" / Astro Shooter model on Seeker. NEREON uses a Pass NFT to
+gate premium access — no central subscription, fully on-chain ownership.
+
+Monetisation Flow
+┌─────────────────────────────────────────────────────────┐
+│  User opens app → LandingScene load                     │
+│  → NereonPassGatePopup appears IMMEDIATELY              │
+│     (before wallet login prompt)                         │
+│                                                         │
+│  ┌─────────────────┐   ┌──────────────────────────────┐ │
+│  │  🏆 MINT PASS   │   │  🎮 PLAY FREE (with ads)     │ │
+│  │  0.5 SOL        │   │  Close popup → sign in →     │ │
+│  │  → sign in →    │   │  enter NEREON normally        │ │
+│  │  → mint tx →    │   └──────────────────────────────┘ │
+│  │  → Pass minted  │                                    │
+│  └─────────────────┘                                    │
+└─────────────────────────────────────────────────────────┘
+
+"Play Free" OR closing the popup = same action: dismiss, proceed to normal login.
+Mint Pass = triggers wallet login FIRST, then the 0.5 SOL mint transaction.
+
+Pass Holder vs Free Player
+Feature                     Pass Holder         Free Player
+─────────────────────────── ─────────────────── ───────────────────────────
+Reward claims               Instant (tap Claim) Must watch Unity Ad first
+Ad frequency                Zero                Rewarded ad per claim
+Pass indicator on HUD       ✅ Gold badge        ❌ None
+Secondary market            Tradeable NFT       N/A
+
+On-Chain Implementation
+Option A (recommended first): Custom Anchor PDA — simpler, faster to ship
+  mint_nereon_pass(price_lamports: u64) instruction:
+    - Transfers SOL from user wallet → treasury wallet
+    - Creates NereonPassAccount PDA: seeds=["nereon_pass", wallet]
+      { holder: Pubkey, minted_at: i64, is_active: bool, bump }
+  check_pass: NereonClient.HasPassAsync(PublicKey) → bool
+  No Metaplex dependency; check is a single getProgramAccount call.
+
+Option B (phase 2): Upgrade to full Metaplex NFT with visual art, tradeable on
+  Magic Eden / Tensor. Uses Candy Machine v3 for mint. Adds collection-level royalties.
+  Unity checks: getTokenAccountsByOwner filtered by NereonPassCollectionMint.
+
+Unity Implementation Plan
+  NereonPassPopup.cs          — Popup UI shown on LandingScene Awake() before wallet panel
+  NereonPassChecker.cs        — Async check: HasPassAsync(pubkey) → bool (cached per session)
+  NereonPassMinter.cs         — Builds + sends mint_nereon_pass tx via NereonClient
+  NereonPassSession.cs        — Stores HasPass bool in session (no repeat RPC each scene)
+  NereonAdManager.cs          — Unity Ads rewarded ad wrapper; Claim() = watch ad → callback
+  RewardClaimController.cs    — Orchestrates claim: HasPass? → instant : watch ad → claim
+
+Ad Network: Unity Ads (com.unity.ads)
+  Rewarded ad shown only at reward-claim time (never interstitials unprompted).
+  Seeker / Android dApp Store policy: user-initiated only.
+  Implementation: Advertisement.Load(adUnitId) + Advertisement.Show(adUnitId, listener)
+
+content_copy
+🌐 Seeker Ecosystem Features (Astrolab-Inspired)
+Four features from Astrolab's successful Seeker apps to shadow:
+
+1. Rent Reclaim (SOL Recovery)
+   Users close empty token accounts (ATAs) to reclaim ~0.002 SOL each.
+   Script: NereonRentReclaimer.cs
+   Menu location: Options → "Reclaim SOL" → lists empty ATAs → user selects → closeAccount tx
+   Value: tangible financial return keeps users opening the app daily.
+
+2. Activity Ring Heartbeat
+   Seeker users need on-chain activity to qualify for $SKR airdrop tiers.
+   Script: NereonActivityPulse.cs
+   Behaviour: On HomeScene entry + every 10 min session → send 1 low-cost memo-program tx.
+   Tx content: memo="NEREON:heartbeat:{pubkey_short}" — costs ~5000 lamports (0.000005 SOL).
+   Result: Every NEREON session counts as high-frequency "active use" in the Seeker ecosystem.
+
+3. Seeker ID (.skr Domain) on Leaderboards
+   Instead of username, resolve the wallet's .skr domain name automatically.
+   Script: SeekerIdResolver.cs
+   API: SNS (Solana Name Service) — resolve .skr TLD for a given PublicKey.
+   Fallback: If no .skr domain, use the on-chain NEREON username as before.
+   Display: Leaderboard rows show ".skr" badge next to resolved names.
+
+4. Double-Tap Seed Vault Signing (Biometric UX)
+   Already implemented via BiometricAuthManager.cs + Mobile Wallet Adapter.
+   Enhancement: all reward-claim transactions use the native Seed Vault flow
+   (not Web3Auth popup) so the UX feels like a system-level utility.
 
 content_copy
 🗺️ Roadmap (Current Status)
@@ -634,7 +747,13 @@ Date	Decision	Reason
 2026-02-28	PlayerWorldUI: cylindrical Y-axis billboard	Replaces camera-rotation copy which caused canvas tilt at overhead angles; name tag now always world-upright
 2026-02-28	SceneLoader: 15-frame post-activation buffer	Prevents spinner freeze during Unity's main-thread shader compilation stall on scene activation
 2026-02-28	HomeSceneManager: FadeOverlay moved to end	World stays hidden until all on-chain data loaded + avatar spawned; prevents empty-world flash
-2026-02-28	NereonCameraSetup.cs created — definitive Invector camera kill	vThirdPersonInput.Start() re-wires vThirdPersonCamera after any earlier disable. NereonCameraSetup at DefaultExecutionOrder(5000) runs after all default-order Start() methods, nulls tpCamera ref, sets lockCameraInput=true, disables component. 3-layer defence: PlayerSetup (early disable) + NereonCameraSetup (late Start kill) + WireCameraToAvatarAsync (1-frame insurance pass).
+2026-03-02      ENTER NEREON button is mandatory — no auto-login bypass       Seeker dApp Store policy: user must always confirm entry. SDK silent session-restore shows Welcome Back panel but does NOT auto-load HomeScene. _userInitiatedLogin flag gates HandleLogin → OnWalletReady.
+2026-03-02      Biometric auth before ENTER NEREON (Seeker requirement)        BiometricAuthManager.AuthenticateAsync() called in OnReconnectClicked. Required for Seeker dApp Store. Applies to both MWA and Web3Auth reconnect paths.
+2026-03-02      Avatar 3× scale — stepOffset normalised in NereonCameraSetup  go.transform.localScale *= 3 inflates CC.stepOffset 3× in world space (0.9 m → avatar floats after jump). NereonCameraSetup (order 5000) divides stepOffset by scale.y to keep world step ≈ 0.3 m.
+2026-03-02      Spine01 kinematic Rigidbody added by NereonCameraSetup         Invector ragdoll code does GetComponent<Rigidbody>() on spine bones and throws MissingComponentException when no ragdoll is set up. NereonCameraSetup.Start() adds a kinematic Rigidbody to Spine01 (no physics effect).
+2026-03-02      Debug panel: compact tab button replaces full-width bar         DebugUIController redesigned: small 88×24 px tab button sits physically above the 210×118 panel. Button label is "⚙ DEBUG ▼/▲". Panel anchored at (0, -30) below tab.
+2026-03-02      Minimap live via MobileHUDCanvas.TryLinkPlayer()                MinimapController.Create() called once player links. Buildings auto-register MinimapMarker(Building). Remote players auto-register MinimapMarker(OtherPlayer) in RemotePlayerVisuals.
+2026-02-28      NereonCameraSetup.cs created — definitive Invector camera kill	vThirdPersonInput.Start() re-wires vThirdPersonCamera after any earlier disable. NereonCameraSetup at DefaultExecutionOrder(5000) runs after all default-order Start() methods, nulls tpCamera ref, sets lockCameraInput=true, disables component. 3-layer defence: PlayerSetup (early disable) + NereonCameraSetup (late Start kill) + WireCameraToAvatarAsync (1-frame insurance pass).
 2026-02-28	PlayerWorldUI scale reduced (CanvasScale 0.005, heightOffset 1.0)	At overhead camera pitch=55° from 10m, 0.01 scale was too large. 0.005 + reduced font sizes gives clean compact tag.
 2026-02-28	SimpleFollowCamera prefers PlayerSetup.LocalPlayer	FindWithTag("Player") could lock onto a remote NGO player. Now resolves LocalPlayer first, fallback to FindWithTag only.
 2026-02-28	PlayerHUD always rebuilds in Awake()	Removed `if (_usernameText == null)` guard; always calls BuildPanel(). Destroys pre-existing canvas child first.
