@@ -1,7 +1,7 @@
 NEREON — Project Bible
 Single source of truth. Read this before every session.
 Every Copilot session, every developer decision, every architecture change is reflected here.
-Last updated: Session 20 — 2026-03-03 (Fixed avatar walking-on-air after jump: castLengthGrounded no longer scaled ×3 in NereonCameraSetup; fixed AudioListener spam: removed earlier in PlayerSetup.SetupAsLocalPlayer(); fixed TMP missing-glyph warnings: ASCII toast icons + Truncate overflow; fixed CS4014 + enableWordWrapping obsolete; NereonOrientationGuard implemented)
+Last updated: Session 21 — 2026-03-04 (NereonPassPopup.cs created: DontDestroyOnLoad singleton, static Show()/ShowIfNeeded()/Hide(), fade in/out, backdrop tap-to-close, X button top-right, MINT PASS + PLAY FREE buttons, full runtime UI. NereonPassSession.cs created: PlayerPrefs tier cache (tier 0/1/2). LoginFlowController.Awake() now calls NereonPassPopup.ShowIfNeeded() for first-time auto-show. BtnPassPopUp auto-wired via SceneManager.sceneLoaded + label updates by tier.)
 
 🎯 The Vision
 NEREON is a restricted open-world, third-person online RPG built entirely on the Solana blockchain.
@@ -622,10 +622,10 @@ Pass Popup Trigger Rules
                        (auto on Awake + manual button click) call the same code path.
 
 Unity Implementation Plan
-  NereonPassPopup.cs          — Popup UI + static Show(). Called by Awake (auto) and button (manual)
+  NereonPassPopup.cs          — ✅ DONE. DontDestroyOnLoad singleton. Static Show()/ShowIfNeeded()/Hide(). Backdrop tap-to-close + X button. MINT PASS + PLAY FREE buttons. Fade in/out. BtnPassPopUp auto-wired via SceneManager.sceneLoaded.
+  NereonPassSession.cs        — ✅ DONE. PlayerPrefs tier cache (tier 0=unset/1=free/2=pass). SetTier(), HasChosenTier, HasPass.
   NereonPassChecker.cs        — Async check: HasPassAsync(pubkey) → bool (cached per session)
   NereonPassMinter.cs         — Builds + sends mint_nereon_pass tx via NereonClient
-  NereonPassSession.cs        — Stores HasPass bool in session (no repeat RPC each scene)
   NereonAdManager.cs          — Unity Ads rewarded ad wrapper; Claim() = watch ad → callback
   RewardClaimController.cs    — Orchestrates claim: HasPass? → instant : watch ad → claim
 
@@ -707,6 +707,8 @@ Ambient music, cinematic intro, bubble chat
  ✅ Fix WASD editor movement — NereonMobileInput keyboard fallback now runs before _active guard; movement injection also runs before guard; WASD works from first frame in editor without waiting for MobileHUDCanvas to link
  ✅ Fix PlayerHUD world-space inheritance bug — PlayerHUDCanvas was parented to PlayerHUD GO (inside [HUD Canvas] WorldSpace Canvas); Unity inherited WorldSpace render mode, making panel appear wrong position/size. Fixed by creating PlayerHUDCanvas as scene-root GO (no parent). Tracked via _canvasGO field, destroyed in OnDestroy().
  ✅ Fix camera "too far" — SimpleFollowCamera defaults tuned: _pitchAngle 55→45 (more forward-facing, character more visible), _followDist 10→6 (closer final view), _introStartDist 60→100 (dramatic zoom-in), _introZoomTime 2.5→3s, _lookOffsetY 1.2→1.5 (aim at torso/head)
+ ✅ NereonPassPopup — DontDestroyOnLoad singleton. Static Show()/ShowIfNeeded()/Hide(). Backdrop tap-to-close + X button top-right. MINT PASS + PLAY FREE buttons. Fade in/out. BtnPassPopUp auto-wired via SceneManager.sceneLoaded. LoginFlowController.Awake() calls ShowIfNeeded() for first-time auto-show.
+ ✅ NereonPassSession — PlayerPrefs tier cache. tier 0=unset (never chosen), 1=free, 2=pass holder.
  🔧 Wire Fantasy Wooden GUI sprites into PlayerHUD + MobileHUDCanvas via [SerializeField] fields
  🔧 True circular button shapes (runtime Texture2D circle sprites, or Fantasy Wooden GUI sprites)
 🔲 Phase 6 — Mini-Game Framework + Leaderboards
