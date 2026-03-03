@@ -1,7 +1,7 @@
 NEREON — Project Bible
 Single source of truth. Read this before every session.
 Every Copilot session, every developer decision, every architecture change is reflected here.
-Last updated: Session 18 — 2026-03-02 (Toast notifications (NereonToastService), Pass NFT + Unity Ads architecture planned, Astrolab/Seeker feature set defined, skybox auto-init, BtnEnterNereon auto-wire confirmed, avatar physics params scaled)
+Last updated: Session 20 — 2026-03-03 (Fixed avatar walking-on-air after jump: castLengthGrounded no longer scaled ×3 in NereonCameraSetup; fixed AudioListener spam: removed earlier in PlayerSetup.SetupAsLocalPlayer(); fixed TMP missing-glyph warnings: ASCII toast icons + Truncate overflow; fixed CS4014 + enableWordWrapping obsolete; NereonOrientationGuard implemented)
 
 🎯 The Vision
 NEREON is a restricted open-world, third-person online RPG built entirely on the Solana blockchain.
@@ -486,6 +486,10 @@ NereonMobileInput.cs	Scripts/	Bridges MobileHUDCanvas input to Invector's vThird
 JoystickWidget.cs	Scripts/	Virtual joystick implementation.
 DebugUIController.cs	Scripts/	In-game debug overlay (Editor + DEBUG_NEREON builds only).
 NereonCultureEnforcer.cs	Scripts/	[RuntimeInitializeOnLoadMethod] — forces InvariantCulture on all threads. Auto, no setup.
+NereonOrientationGuard.cs	Scripts/	[RuntimeInitializeOnLoadMethod] — forces landscape before any scene loads. DontDestroyOnLoad singleton. Polls screen dimensions; shows blocking popup if portrait detected. Auto-dismisses when landscape confirmed.
+NereonCanvasHelper.cs	Scripts/	Static utility. Setup(CanvasScaler) → 2400×1080 Seeker target, Match=0.5. CreateSafeContent(Transform) → RectTransform for safe-area content.
+NereonSafeAreaFitter.cs	Scripts/	MonoBehaviour. Polls Screen.safeArea every frame; adjusts child RectTransform anchors. Attach to SafeContent child of any ScreenSpaceOverlay Canvas.
+NereonToastService.cs	Scripts/	DontDestroyOnLoad toast singleton. Pyro integration + UGUI fallback. ShowSuccess/Info/Warning/Error(msg).
 
 content_copy
 Blockchain
@@ -547,8 +551,12 @@ Skyden_Games	✅ In project	Interactive props
 Vefects	✅ In project	VFX_Stylized_Fire, torch fire
 Eric VFX Studio	✅ In project	FX_Fireball, FX_LootDrop, FX_LightPillar
 SmoothShakeFree	✅ In project	Camera shake
-Pyro Entertainment	✅ In project	Toast notifications
+Pyro Entertainment	✅ In project	Toast notifications (NereonToastService.cs — Pyro + UGUI fallback)
 DialogGraphSystem	✅ In project	NPC/building dialog trees
+Fantasy Skybox FREE	✅ In project	HomeScene skybox. Run NEREON → Setup → Wire Skybox (Resources) to populate Resources/Skyboxes/
+Free_Casual_GUI (Skyden_Games)	✅ In project	Button/panel/HUD sprites. Demo/Sprites/Buttons/Buttons.png (atlas), HUD/HUD.png (atlas), Others/ (individual PNGs + 24 Shape sprites). SVGs require Vector Graphics package.
+Action Icons	✅ In project	RPG icons. Technology 01 — Smartphone used in NereonOrientationGuard overlay.
+2D Game UI KIT (300Mind)	✅ In project	UI-pack_Sprite_1/2.png sprite atlases + Oswald/GROBOLD fonts for headers.
 JazzCreate BubbleFontFree	✅ In project	JazzCreateBubble SDF — default TMP font
 BlockadeLabs-SDK-Unity	✅ In project	Not used at runtime — package present only
 Viking Village	✅ In project	Environment dressing, water shaders
@@ -600,8 +608,21 @@ Option B (phase 2): Upgrade to full Metaplex NFT with visual art, tradeable on
   Magic Eden / Tensor. Uses Candy Machine v3 for mint. Adds collection-level royalties.
   Unity checks: getTokenAccountsByOwner filtered by NereonPassCollectionMint.
 
+Pass Popup Trigger Rules
+  AUTO (first open):  Popup appears automatically when player_tier == 0 (unset) — i.e. first-time
+                      users who have never chosen. Appears before wallet login panel.
+  MANUAL (returning): A "Upgrade to Pass" button is always visible on LandingScene (bottom of screen
+                      or options area). Tapping it reopens the popup at any time — lets free players
+                      upgrade later without needing to uninstall. Button is always present but changes
+                      label depending on session state:
+                        • player_tier == 0  → "GET THE PASS" (gold, prominent)
+                        • player_tier == 1  → "Upgrade to Pass" (subtle, secondary)
+                        • player_tier == 2  → "Pass Active ✓" (disabled/greyed, no action)
+  Implementation note: NereonPassPopup.cs exposes a static Show() method so both triggers
+                       (auto on Awake + manual button click) call the same code path.
+
 Unity Implementation Plan
-  NereonPassPopup.cs          — Popup UI shown on LandingScene Awake() before wallet panel
+  NereonPassPopup.cs          — Popup UI + static Show(). Called by Awake (auto) and button (manual)
   NereonPassChecker.cs        — Async check: HasPassAsync(pubkey) → bool (cached per session)
   NereonPassMinter.cs         — Builds + sends mint_nereon_pass tx via NereonClient
   NereonPassSession.cs        — Stores HasPass bool in session (no repeat RPC each scene)
@@ -678,6 +699,11 @@ Ambient music, cinematic intro, bubble chat
  ✅ Fix SimpleFollowCamera to use PlayerSetup.LocalPlayer (not FindWithTag — no more remote player lock in multiplayer)
  ✅ Fix AvatarManager vThirdPersonCamera conflict — NereonCameraSetup component added to local player; PlayerSetup.WireCinemachineCamera() now disables instead of wires; vThirdPersonInput.tpCamera nulled + lockCameraInput=true; 3-layer defence against frame-timing races
  ✅ Fix AudioListener duplicate warning — NereonCameraSetup now removes AudioListener from player in Start() (player prefab has one, Main Camera has one → was causing "2 audio listeners" warning)
+ ✅ Fix AudioListener spam — PlayerSetup.SetupAsLocalPlayer() now removes duplicate AudioListener immediately on spawn (before NereonCameraSetup fires at order 5000), eliminating per-frame spam
+ ✅ Fix avatar walking-on-air after jump — NereonCameraSetup no longer scales castLengthGrounded by ×scale. At ×3 scale the cast reached 9 m, hitting terrain while airborne → Invector thought player was grounded → zero fall gravity → hover. castLengthGrounded kept at original value; only sphereCastRadius and castLengthAirborne are scaled.
+ ✅ Fix TMP missing-glyph warnings — NereonToastService icon chars changed to ASCII (OK/X/i/!); overflow mode Ellipsis→Truncate; LoginFlowController status strings changed from Unicode … → ... and — → -
+ ✅ Fix CS4014 unawaited async warning — LoginFlowController.OnReconnectClicked() LoginWalletAdapter call wrapped in #pragma disable CS4014
+ ✅ Fix PlayerWorldUI CS0618 — enableWordWrapping replaced with textWrappingMode = Normal/NoWrap
  ✅ Fix WASD editor movement — NereonMobileInput keyboard fallback now runs before _active guard; movement injection also runs before guard; WASD works from first frame in editor without waiting for MobileHUDCanvas to link
  ✅ Fix PlayerHUD world-space inheritance bug — PlayerHUDCanvas was parented to PlayerHUD GO (inside [HUD Canvas] WorldSpace Canvas); Unity inherited WorldSpace render mode, making panel appear wrong position/size. Fixed by creating PlayerHUDCanvas as scene-root GO (no parent). Tracked via _canvasGO field, destroyed in OnDestroy().
  ✅ Fix camera "too far" — SimpleFollowCamera defaults tuned: _pitchAngle 55→45 (more forward-facing, character more visible), _followDist 10→6 (closer final view), _introStartDist 60→100 (dramatic zoom-in), _introZoomTime 2.5→3s, _lookOffsetY 1.2→1.5 (aim at torso/head)
@@ -705,6 +731,7 @@ Ambient music, cinematic intro, bubble chat
  Submit via https://seeker.solana.com
 ⚠️ Architecture Gotchas — Important for Every Session
 Gotcha	Detail
+Seeker target resolution	2400×1080, 20:9 landscape, ~395 PPI. All CanvasScalers use NereonCanvasHelper.Setup() — NEVER hardcode 1080×1920 (portrait) or 1920×1080 (old standard). MobileHUDCanvas and PlayerHUD wrap all visual content in a SafeContent/NereonSafeAreaFitter child so controls avoid the punch-hole camera and Android gesture bars. MinimapController.Create(canvas, player, safeContent) accepts optional safe parent.
 Cinemachine installed but unused	SimpleFollowCamera.cs handles the player follow camera. Do not add Cinemachine Virtual Cameras for the player.
 BlockadeLabs SDK installed but not active	SkyboxController.Apply(Material) sets a static material reference. No API calls at runtime.
 Loading screen package exists but unused	Assets/Loading screen package/ remains in project. SceneLoader.cs uses only its own built-in spinner — it does NOT load the NereonLoadingScreen prefab.
@@ -720,9 +747,10 @@ Starter Assets removed	Invector is the sole character controller. Do NOT add Uni
 Invector is backbone	All player movement, actions, and mobile input flow through Invector. NereonMobileInput.cs bridges touch UI to Invector.
 PlayerWorldUI cylindrical billboard	LateUpdate: lookDir = (canvasPos-camPos).withY(0); rotation = Quaternion.LookRotation(lookDir, up). NEVER use transform.rotation = _cam.rotation — copies camera pitch, canvas tilts at overhead angles.
 SimpleFollowCamera uses LocalPlayer	SimpleFollowCamera must resolve target via PlayerSetup.LocalPlayer first, NOT FindWithTag("Player") — FindWithTag can lock onto remote NGO players in multiplayer.
-NereonCameraSetup.cs — camera ownership component	Added to local player by AvatarManager. [DefaultExecutionOrder(5000)] runs AFTER vThirdPersonInput.Start(). Nulls tpCamera field, sets lockCameraInput=true, disables vThirdPersonCamera component. Also removes duplicate AudioListener from player. This is the definitive Invector camera kill — do not remove it.
+NereonCameraSetup.cs — camera ownership component	Added to local player by AvatarManager. [DefaultExecutionOrder(5000)] runs AFTER vThirdPersonInput.Start(). Nulls tpCamera field, sets lockCameraInput=true, disables vThirdPersonCamera component. Also removes duplicate AudioListener from player. castLengthGrounded is intentionally NOT scaled (see jumping gotcha). This is the definitive Invector camera kill — do not remove it.
 vThirdPersonInput re-enables camera on Start()	vThirdPersonInput.Start() → CharacterInit() coroutine → FindCamera() → SetMainTarget() → Init() — this re-wires vThirdPersonCamera even if we disabled it earlier. NereonCameraSetup at order 5000 is the correct kill because it runs AFTER vThirdPersonInput.Start() (order 0).
-AudioListener duplicate	Invector player prefab includes an AudioListener (so audio follows the character in third-person mode). Main Camera always has one too. NereonCameraSetup.Start() removes the player's AudioListener. Main Camera is authoritative because SimpleFollowCamera keeps it near the player.
+AudioListener duplicate	Invector player prefab includes an AudioListener (so audio follows the character in third-person mode). Main Camera always has one too. PlayerSetup.SetupAsLocalPlayer() removes it IMMEDIATELY on spawn (before NereonCameraSetup fires). NereonCameraSetup Step 3 is a second-pass safety net. Main Camera is authoritative because SimpleFollowCamera keeps it near the player.
+Avatar walking on air after jump	Root cause: NereonCameraSetup was scaling castLengthGrounded by ×localScale.y (×3 → 9 m). A 9 m cast still hits terrain when the player is 2-3 m above ground after a jump, so Invector marks the player "grounded" and removes fall gravity. FIX: only scale sphereCastRadius and castLengthAirborne; leave castLengthGrounded at its original Invector value. NEVER add motor.castLengthGrounded *= sy back.
 NereonMobileInput WASD in editor	_active starts false; Activate() is called by MobileHUDCanvas.TryLinkPlayer(). The WASD keyboard block and movement injection run BEFORE the _active guard so editor testing works from the first frame. Sprint/jump/action (below the guard) still require _active=true.
 
 content_copy
@@ -747,6 +775,8 @@ Date	Decision	Reason
 2026-02-28	PlayerWorldUI: cylindrical Y-axis billboard	Replaces camera-rotation copy which caused canvas tilt at overhead angles; name tag now always world-upright
 2026-02-28	SceneLoader: 15-frame post-activation buffer	Prevents spinner freeze during Unity's main-thread shader compilation stall on scene activation
 2026-02-28	HomeSceneManager: FadeOverlay moved to end	World stays hidden until all on-chain data loaded + avatar spawned; prevents empty-world flash
+2026-03-03	castLengthGrounded NOT scaled in NereonCameraSetup	At ×3 scale the 9 m cast hit terrain while player was airborne after a jump — Invector marked player grounded, gravity zeroed, avatar hovered. sphereCastRadius and castLengthAirborne scale correctly; castLengthGrounded must stay at original Invector value.
+2026-03-03	AudioListener removal moved to PlayerSetup.SetupAsLocalPlayer()	NereonCameraSetup fires at DefaultExecutionOrder(5000) — too late; per-frame spam filled the log for ~20 frames. Removing the AudioListener synchronously in SetupAsLocalPlayer() eliminates the spam immediately on spawn.	All runtime CanvasScalers now use NereonCanvasHelper.Setup(): 2400×1080, Match=0.5, ScaleWithScreenSize. Seeker is 2400×1080 FHD+ 20:9. Safe area handled by NereonSafeAreaFitter on a SafeContent wrapper inside every HUD canvas — protects joystick, buttons, minimap, and HUD panel from punch-hole camera and gesture bars.
 2026-03-02      ENTER NEREON button is mandatory — no auto-login bypass       Seeker dApp Store policy: user must always confirm entry. SDK silent session-restore shows Welcome Back panel but does NOT auto-load HomeScene. _userInitiatedLogin flag gates HandleLogin → OnWalletReady.
 2026-03-02      Biometric auth before ENTER NEREON (Seeker requirement)        BiometricAuthManager.AuthenticateAsync() called in OnReconnectClicked. Required for Seeker dApp Store. Applies to both MWA and Web3Auth reconnect paths.
 2026-03-02      Avatar 3× scale — stepOffset normalised in NereonCameraSetup  go.transform.localScale *= 3 inflates CC.stepOffset 3× in world space (0.9 m → avatar floats after jump). NereonCameraSetup (order 5000) divides stepOffset by scale.y to keep world step ≈ 0.3 m.
