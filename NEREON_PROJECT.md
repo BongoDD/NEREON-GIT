@@ -807,6 +807,410 @@ LoginWeb3Auth task was silently dropped (Session 23)	`Web3.Instance.LoginWeb3Aut
 2026-03-04	NereonPassPopup: fires on-chain set_player_tier after local SetTier()	OnMintPass/OnPlayFree now call SetTierOnChainAsync(tier).Forget() immediately after NereonPassSession.SetTier(). Shows toast on confirm or warning on fail — local cache always kept.
 
 content_copy
+---
+
+## 🌳 Technical Architecture Map
+*Last updated: Session 24. AI agents: read this before any code change involving GameObjects, scenes, or script wiring.*
+
+This section is the single authoritative tree of every scene, every relevant GameObject, every component, and every inter-script dependency in NEREON. Keep it updated whenever a new GameObject, component, or script relationship is added.
+
+---
+
+### Persistent Objects — DontDestroyOnLoad
+These GameObjects survive ALL scene transitions. They are created once and never duplicated.
+
+```
+[DontDestroyOnLoad]
+├── SceneLoader              (Scripts/SceneLoader.cs)
+│     └─ [built at runtime by SceneLoader.Instance] — spinner overlay canvas
+├── AmbientMusicManager      (Scripts/AmbientMusicManager.cs)
+│     └─ AudioSource         ← LandingScene/WelcomeInit background music
+├── DebugUI                  (Scripts/DebugUIController.cs)       [EDITOR / DEBUG_NEREON only]
+│     └─ [builds DebugCanvas at runtime] ← ` + "`" + `~` + "`" + ` or F1/F2/F3 hotkeys
+├── NereonCultureEnforcer    [RuntimeInitializeOnLoadMethod] — no GO, pure static
+└── NereonOrientationGuard   [RuntimeInitializeOnLoadMethod] — spawns landscape-lock popup
+```
+
+---
+
+### LandingScene  (build index 0)
+
+```
+LandingScene
+├── EventSystem              [EventSystem, InputSystemUIInputModule]
+├── Main Camera              [Camera, UniversalAdditionalCameraData, AudioListener]
+├── [WalletController]       [MainThreadDispatcher, Web3]
+│     ← INSPECTOR: Web3AuthWalletOptions.network = 5 (SAPPHIRE_MAINNET)
+│     ← INSPECTOR: clientId = BPi5PB_UiIZ... (demo key — replace before production)
+├── Directional Light        [Light, UniversalAdditionalLightData]
+├── Global Volume            [Volume]
+├── LandingCanvas            [Canvas, CanvasScaler, GraphicRaycaster]
+│   ├── Logo / Title
+│   ├── BtnConnectWallet     ← LoginFlowController._btnConnect
+│   ├── BtnEnterNereon       ← LoginFlowController._btnEnterNereon / _btnReconnect
+│   ├── StatusText           ← LoginFlowController._statusText
+│   ├── SocialLoginPanel
+│   │   └── BtnGoogleLogin   ← LoginFlowController._btnSocialLogin
+│   └── PassPopUP_Panel      [Image(backdrop), Button(close), NereonPassPopup]
+│       ├── close_btn
+│       ├── mintPass_btn
+│       └── playFreeWithAdds_btn
+├── wallet_holder            [Canvas, CanvasScaler, WalletHolder, GraphicRaycaster]
+│   ├── (wallet adapter panels — auto-managed by Solana SDK)
+├── LoginManager             [LoginFlowController]    ← SINGLE instance (duplicate deleted Session 24)
+└── AmbientMusicManager      [AudioSource, AmbientMusicManager]
+```
+
+**Script call chain (LandingScene):**
+```
+Web3.OnLogin event
+  └─ LoginFlowController.HandleLogin(Account)
+        ├─ NereonSessionManager.Save(pubkey, walletType, expiry)
+        ├─ [if _userInitiatedLogin] → NereonClient.IsUserInitializedAsync()
+        │     ├─ true  → SceneLoader.Load("HomeScene")
+        │     └─ false → SceneLoader.Load("WelcomeInitScene")
+        └─ [else] → show "Welcome Back" panel, wait for BtnEnterNereon tap
+
+NereonPassPopup (Start, if tier==0)
+  └─ SetActive(true) → show pass-choice overlay
+        ├─ OnMintPass()  → NereonPassSession.SetTier(2) + SetTierOnChainAsync(2).Forget()
+        └─ OnPlayFree()  → NereonPassSession.SetTier(1) + SetTierOnChainAsync(1).Forget()
+              └─ NereonClient.SetPlayerTierAsync(tier) → set_player_tier on-chain tx
+```
+
+**⚠️ Inspector wiring required (LandingScene):**
+
+| Field | On GO | Must point to |
+|---|---|---|
+| `_btnConnect` | LoginManager | LandingCanvas/BtnConnectWallet |
+| `_btnEnterNereon` | LoginManager | LandingCanvas/BtnEnterNereon |
+| `_btnSocialLogin` | LoginManager | LandingCanvas/SocialLoginPanel/BtnGoogleLogin |
+| `_statusText` | LoginManager | LandingCanvas/StatusText |
+| Web3 component | [WalletController] | network=5, redirectUrl, clientId |
+
+---
+
+### WelcomeInitScene  (build index 3)
+
+```
+WelcomeInitScene
+├── EventSystem              [EventSystem, InputSystemUIInputModule]
+├── Main Camera              [Camera, AudioListener]
+├── WelcomeCanvas            [Canvas, CanvasScaler, GraphicRaycaster]
+│   ├── Panel_AvatarSelect   ← WelcomeSceneFlow panel 1
+│   │   └── AvatarCarousel   ← AvatarSelector.cs (reads AvatarRegistry)
+│   ├── Panel_UsernameEntry  ← WelcomeSceneFlow panel 2
+│   │   └── TMP_InputField
+│   └── Panel_Confirming     ← WelcomeSceneFlow panel 3
+│       ├── UISpinner
+│       └── StatusText
+├── WelcomeFlowController    [WelcomeInitController, WelcomeSceneFlow]
+└── AvatarPreviewStage       (3D preview — rotates selected avatar model)
+```
+
+**Script call chain (WelcomeInitScene):**
+```
+WelcomeSceneFlow (3-panel UI nav)
+  └─ Panel 3 confirm → WelcomeInitController.CompleteSetup(avatarId, username)
+        └─ NereonClient.BuildInitializeUserIx(wallet, avatarId, username)
+              └─ send tx → Anchor: initialize_user (creates UserProfile + CharacterStats PDAs)
+                    └─ on confirmed → PlayerPrefs.SetString("NEREON_Username", username)
+                          └─ SceneLoader.Load("HomeScene")
+```
+
+---
+
+### HomeScene  (build index 4)
+
+#### Static GameObjects (placed in Editor, persistent)
+
+```
+HomeScene
+├── Main Camera              [Camera, UniversalAdditionalCameraData, AudioListener,
+│                             SimpleFollowCamera, HomeSceneCinematic?]
+│     └─ SimpleFollowCamera: auto-discovers via PlayerSetup.LocalPlayer (NOT FindWithTag)
+├── Directional Light        [Light, UniversalAdditionalLightData]
+├── GlobalVolume             [Volume]
+│
+├── [Player]                 (empty root — avatar spawned here by AvatarManager)
+│   └── SpawnPoint           Tag="SpawnPoint"  ← WIRE to AvatarManager._spawnPoint
+│
+├── [Managers]
+│   ├── HomeSceneManager     [HomeSceneManager]
+│   │     ← INSPECTOR: _avatarManager → [Managers]/AvatarManager ✅ wired
+│   │     ← INSPECTOR: _networkManager → [Managers]/NereonNetworkManager
+│   │     ← INSPECTOR: _hud → (PlayerHUD, auto-spawns if null)
+│   │     ← INSPECTOR: _fadeOverlay → (CanvasGroup on fade panel)
+│   ├── AvatarManager        [AvatarManager]
+│   │     ← INSPECTOR: _registry → Assets/_NEREON/Data/AvatarRegistry.asset  ⚠️ MUST WIRE
+│   │     ← INSPECTOR: _spawnPoint → [Player]/SpawnPoint  ⚠️ MUST WIRE (currently fileID=0)
+│   ├── NereonNetworkManager [NereonNetworkManager]
+│   │     ← INSPECTOR: NetworkManager component (NGO)
+│   └── WorldSyncManager     [WorldSyncManager]
+│         ← INSPECTOR: _registry → Assets/_NEREON/Data/WorldVariantRegistry.asset
+│
+├── [HUD Canvas]             [Canvas (WorldSpace or ScreenSpace)]
+│   └── PlayerHUD            [PlayerHUD]  ← Refresh(name, level, xp) called by HomeSceneManager
+│
+├── HomeAmbientManager       [HomeAmbientManager, AudioSource]
+├── SafetyGround             [MeshFilter, MeshRenderer, MeshCollider] ← flat plane at Y=-2
+│
+├── [Village]
+│   ├── Building_CoinFlip    [MeshFilter, MeshRenderer, BuildingInteraction, IInteractable]
+│   ├── Building_CardTable   [BuildingInteraction]
+│   ├── Building_PuzzleTower [BuildingInteraction]
+│   ├── Building_Oracle      [BuildingInteraction]
+│   └── Building_Arena       [BuildingInteraction]
+│         BuildingInteraction: checks HomeSceneManager.CachedStats.Level → loads mini-game scene
+│
+├── NoticeBoard              [MeshFilter, MeshRenderer, NoticeBoard]
+│     └─ world-space Canvas  ← reads GameLeaderboard PDAs; shows top-5 per game
+│
+├── [ScatterManager]         [TerrainScatterOnReady]
+│     ← spawns tree/bush/rock instances on terrain at runtime (NatureStarterKit2 prefabs)
+│
+├── [Terrain]                [Terrain, TerrainCollider]
+│     Size: ~1500×1500 units. Manually sculpted. Do NOT add MapMagic.
+│
+├── [TerrainProps]           (static rocks, road, river etc — scene-placed)
+├── [Buildings]              (static building meshes — no scripts, visual only)
+└── [Vegetation]             (static foliage — may be disabled if TerrainScatterOnReady handles it)
+```
+
+#### Runtime-Spawned GameObjects (created by scripts during play)
+
+```
+[RUNTIME — created in HomeScene after play begins]
+│
+├── SkyboxController         spawned by HomeSceneManager.Start() if not already in scene
+│     [SkyboxController] → RenderSettings.skybox = WorldVariant.skyboxMaterial
+│
+├── MobileHUD                spawned by HomeSceneManager.Start()
+│     [MobileHUDCanvas] → builds joystick + action buttons overlay canvas
+│       └─ Calls NereonCanvasHelper.GetCircleSprite() for button shapes
+│       └─ Calls MinimapController.Create() once player is linked
+│
+├── DebugUI                  spawned by HomeSceneManager.Start() [EDITOR only]
+│     [DebugUIController] → DontDestroyOnLoad, collapsible debug tab
+│
+├── SceneLoader              spawned if not present from DontDestroyOnLoad
+│
+└── PlayerAvatar             spawned by AvatarManager.LoadAvatarAsync()
+      └─ Parented under [Player] GO
+      └─ Prefab: Assets/_NEREON/Prefabs/Avatars/<Name>_Avatar.prefab
+            Components added at runtime by AvatarManager:
+            ├── PlayerSetup              ← warps to SpawnPoint, locks cursor, LocalPlayer singleton
+            ├── NereonMobileInput        ← bridges MobileHUDCanvas touch to Invector
+            ├── SnapToTerrain            ← polls terrain height; keeps player on surface
+            ├── AvatarProgressionEffects ← auras/trails/runes by level
+            ├── NereonCameraSetup        [DefaultExecutionOrder(5000)] ← kills vThirdPersonCamera
+            │     - Destroys ThirdPersonCamera child GO
+            │     - tpInput.tpCamera = null, lockCameraInput = true, ignoreTpCamera = true
+            │     - Removes duplicate AudioListener
+            │     - Normalises CC.stepOffset / skinWidth / sphereCastRadius for 3× scale
+            └── PlayerWorldUI            ← floating name+level tag above avatar head
+```
+
+---
+
+### HomeScene — Full Initialisation Sequence (Frame-by-frame)
+
+```
+[Scene loads]
+  ├── HomeSceneManager.Awake()       → Instance = this
+  ├── HomeSceneManager.Start()
+  │     ├─ auto-spawn SkyboxController (if missing)
+  │     ├─ auto-spawn MobileHUD
+  │     ├─ auto-spawn HomeSceneHUDFilter (hides Invector HUD)
+  │     ├─ auto-spawn DebugUI (Editor only)
+  │     └─ InitialiseAsync().Forget()
+  │
+  └── InitialiseAsync() [UniTaskVoid]
+        ├─ fadeOverlay.alpha = 1 (world stays black)
+        ├─ guard: Web3.Account == null → redirect to LandingScene
+        ├─ await LoadOnChainDataAsync()
+        │     ├─ NereonClient.FetchCharacterStatsAsync(wallet)  [4 retries × 1.5s]
+        │     ├─ NereonClient.FetchUserProfileAsync(wallet)     [4 retries × 1.5s]
+        │     ├─ fallback: PlayerPrefs "NEREON_Username" → local CachedStats/Profile
+        │     ├─ no data + no prefs → SceneLoader.Load("WelcomeInitScene")
+        │     ├─ _hud.Refresh(username, level, xp)
+        │     ├─ AvatarManager.LoadAvatarAsync(profile, stats)
+        │     │     ├─ Instantiate <AvatarId>_Avatar.prefab at spawnPos
+        │     │     ├─ Parent under [Player] GO
+        │     │     ├─ Add PlayerSetup → SetupAsLocalPlayer()
+        │     │     │     ├─ PlaceAtSpawnPoint() → finds SpawnPoint tag → WaitForGroundAsync()
+        │     │     │     │     └─ polls every 150ms up to 45s; Physics.Raycast → terrain Y
+        │     │     │     │           → Teleport(cc, groundY+1.1m, rot) → cc.enabled=true
+        │     │     │     ├─ WireCinemachineCamera() → disable vThirdPersonCamera early
+        │     │     │     └─ DisablePlayerInput()    → locks movement during cinematic
+        │     │     ├─ Add NereonMobileInput, SnapToTerrain, AvatarProgressionEffects
+        │     │     ├─ SetupAsLocalPlayer() → PlayerSetup.LocalPlayer = this
+        │     │     ├─ await UniTask.Yield()
+        │     │     ├─ setup.EnablePlayerInput()  (safety unlock after 1 frame)
+        │     │     ├─ Create PlayerWorldUI child GO
+        │     │     └─ Add NereonCameraSetup (fires at order 5000 on next Start() pass)
+        │     ├─ HomeSceneCinematic.PlayAsync() (optional, if wired)
+        │     ├─ PlayerSetup.LocalPlayer.EnablePlayerInput() (final unlock)
+        │     ├─ SetStatus("Entering NEREON…")
+        │     ├─ farClipPlane = 4000 on all cameras
+        │     └─ NereonNetworkManager.ConnectAsync(wallet)
+        │           └─ UGS init → anonymous sign-in → Lobby create/join → Relay → NGO Host/Client
+        │
+        ├─ SkyboxController.Apply(WorldVariant.skyboxMaterial)
+        ├─ UIAnimations.FadeOutAsync(fadeOverlay, 0.8s)  ← world revealed HERE
+        └─ SetStatus("Welcome, {username}!")
+
+[After Start() completes — NereonCameraSetup.Start() fires at order 5000]
+  NereonCameraSetup
+    ├─ Destroy vThirdPersonCamera child GO (permanent, survives UpdateCameraStates searches)
+    ├─ tpInput.tpCamera = null, lockCameraInput = true, ignoreTpCamera = true
+    ├─ Destroy duplicate AudioListener on player
+    └─ Normalise CC.stepOffset, skinWidth, sphereCastRadius for 3× avatar scale
+
+[SimpleFollowCamera — every LateUpdate]
+  └─ target = PlayerSetup.LocalPlayer.Transform (NOT FindWithTag)
+       └─ smoothly follows player at pitchAngle=45°, yaw=45°, dist=6m
+```
+
+---
+
+### Script Inter-Dependency Map
+
+```
+NereonClient.cs (generated)               ← NEVER hand-edit
+  provides:
+    FetchCharacterStatsAsync / FetchUserProfileAsync / IsUserInitializedAsync
+    BuildInitializeUserIx / BuildSubmitScoreIx / BuildSetPlayerTierIx
+    SetPlayerTierAsync / DecodeUsername
+  called by:
+    HomeSceneManager, WelcomeInitController, LoginFlowController,
+    NereonPassPopup, NoticeBoard, BuildingInteraction
+
+HomeSceneManager.cs
+  depends on: AvatarManager, NereonClient, PlayerHUD, SkyboxController,
+              NereonNetworkManager, WorldSyncManager, HomeSceneCinematic,
+              SceneLoader, PlayerSetup (static .LocalPlayer), UIAnimations
+
+AvatarManager.cs
+  depends on: AvatarRegistry (ScriptableObject), PlayerSetup, NereonMobileInput,
+              SnapToTerrain, AvatarProgressionEffects, PlayerWorldUI,
+              NereonCameraSetup, FloatingNameTag (unused, kept for reference)
+
+PlayerSetup.cs
+  depends on: vThirdPersonInput (Invector), vThirdPersonCamera (Invector)
+  provides: LocalPlayer (static singleton), EnablePlayerInput, DisablePlayerInput
+
+NereonCameraSetup.cs  [DefaultExecutionOrder(5000)]
+  depends on: vThirdPersonCamera, vThirdPersonInput, CharacterController (Invector motor)
+  ALWAYS runs AFTER vThirdPersonInput.Start() (order 0) to kill Invector camera wiring
+
+SimpleFollowCamera.cs
+  depends on: PlayerSetup.LocalPlayer (resolves target) — NO FindWithTag in multiplayer
+
+MobileHUDCanvas.cs
+  depends on: NereonMobileInput (links to player), ProximityInteractor, MinimapController,
+              NereonCanvasHelper.GetCircleSprite(), JoystickWidget
+
+NereonMobileInput.cs
+  depends on: vThirdPersonController (Invector) — injects axis/button input
+
+LoginFlowController.cs
+  depends on: Web3.OnLogin (Solana SDK), NereonClient, NereonSessionManager,
+              BiometricAuthManager, SceneLoader
+
+NereonNetworkManager.cs
+  depends on: UGS (Authentication, Lobby, Relay, QoS), NetworkManager (NGO),
+              WorldSyncManager
+
+WorldSyncManager.cs
+  depends on: WorldVariantRegistry (ScriptableObject), SkyboxController, NereonNetworkManager
+
+SceneLoader.cs  [DontDestroyOnLoad singleton]
+  called by: LoginFlowController, HomeSceneManager, WelcomeInitController,
+             BuildingInteraction, NereonAuthGuard, DebugUIController
+```
+
+---
+
+### Inspector Wiring Checklist (HomeScene)
+⚠️ Run this check every time HomeScene is opened or rebuilt.
+
+| Component | On GameObject | Field | Must point to | Status |
+|---|---|---|---|---|
+| HomeSceneManager | [Managers] | `_avatarManager` | AvatarManager on [Managers] | ✅ wired |
+| HomeSceneManager | [Managers] | `_networkManager` | NereonNetworkManager on [Managers] | check |
+| HomeSceneManager | [Managers] | `_hud` | PlayerHUD | check |
+| HomeSceneManager | [Managers] | `_fadeOverlay` | FadeOverlay CanvasGroup | check |
+| HomeSceneManager | [Managers] | `_cinematic` | HomeSceneCinematic on Main Camera | check |
+| AvatarManager | [Managers] | `_registry` | AvatarRegistry.asset | ⚠️ check |
+| AvatarManager | [Managers] | `_spawnPoint` | [Player]/SpawnPoint | ⚠️ fileID=0 (uses tag fallback) |
+| AvatarManager | [Managers] | `_nameTagPrefab` | FloatingNameTag prefab (optional) | check |
+| NereonNetworkManager | [Managers] | NetworkManager prefab list | HubPlayer.prefab registered | ⚠️ check |
+| WorldSyncManager | [Managers] | `_registry` | WorldVariantRegistry.asset | check |
+| SimpleFollowCamera | Main Camera | (auto-discovers via PlayerSetup.LocalPlayer) | — | ✅ auto |
+| HomeSceneCinematic | Main Camera | `_followCamera` | SimpleFollowCamera | check |
+
+---
+
+### Active Bugs & Resolutions  (session-updated)
+
+| Bug | Root Cause | Fix | Status |
+|---|---|---|---|
+| Duplicate HandleLogin / double session save | Two `LoginFlowController` GOs in LandingScene (`LoginManager` + standalone `LoginFlowController` GO) | Deleted standalone `LoginFlowController` GO in Session 24 | ✅ Fixed |
+| `Failed to find UI/Skin/Knob.psd` (MobileHUDCanvas, DebugUIController) | Unity 6 stripped built-in path | Added `NereonCanvasHelper.GetCircleSprite()` with programmatic fallback | ✅ Fixed |
+| Player not visible in HomeScene | Most likely: AvatarManager `_registry` or `_spawnPoint` not wired in Inspector; or avatar spawned at Y=2000 while WaitForGroundAsync polls terrain | Wire `_registry` to AvatarRegistry.asset; wire `_spawnPoint` to [Player]/SpawnPoint | ⚠️ Investigate |
+| `[Netcode] NetworkPrefab cannot be null` | HubPlayer.prefab not registered in NetworkManager's prefab list | Open NetworkManager → Prefabs list → assign HubPlayer.prefab | ⚠️ Needs fix |
+| Tree prefab `tree01/tree02` no valid mesh renderer | NatureStarterKit2 trees lack MeshRenderer — terrain uses them as detail prototypes | Assign trees as Terrain Detail (SpeedTree/billboard) not as network-style prefab instances | ⚠️ Cosmetic |
+| `[HomeSceneHUDFilter] vHUDController not found` | Invector's HUD controller not in scene (expected — HomeScene has no Invector HUD) | Suppress log level to LogWarning (already done). Non-blocking. | ✅ Harmless |
+| `anchor deploy` not run after lib.rs update (Session 23) | set_player_tier + updated submit_score not live on devnet | Run `anchor deploy --provider.cluster devnet` from anchor/ directory | ⚠️ Pending |
+
+---
+
+### Key Runtime Data Flows
+
+```
+[Wallet Login Flow]
+  User taps Google login
+    → LoginFlowController.OnSocialLoginClicked()
+    → Web3.Instance.LoginWeb3Auth(Provider.GOOGLE).AsUniTask().Forget()
+    → Web3Auth OAuth browser opens
+    → Web3Auth.OnLogin callback
+    → Web3.set_WalletBase → Web3.OnLogin event fires
+    → LoginFlowController.HandleLogin(account)
+    → [if _userInitiatedLogin] NereonClient.IsUserInitializedAsync()
+    → SceneLoader.Load("HomeScene")
+
+[On-Chain Data → Avatar Visible]
+  HomeSceneManager.LoadOnChainDataAsync()
+    → NereonClient.FetchCharacterStatsAsync()   [Solana RPC getAccountInfo]
+    → NereonClient.FetchUserProfileAsync()      [Solana RPC getAccountInfo]
+    → AvatarManager.LoadAvatarAsync(profile, stats)
+    → Instantiate avatar prefab at SpawnPoint
+    → PlayerSetup.WaitForGroundAsync()          [Physics.Raycast every 150ms]
+    → Teleport to groundY + 1.1m
+    → NereonCameraSetup.Start() [order 5000] kills Invector camera
+    → SimpleFollowCamera.LateUpdate() follows PlayerSetup.LocalPlayer
+    → fadeOverlay.alpha = 0   ← world now visible
+
+[Score Submission Flow]
+  mini-game scene ends → MiniGameContext.CurrentGameId set
+    → NereonClient.BuildSubmitScoreIx(authority, treasury, gameId, gameName,
+                                     month, year, score, entryFeeLamports)
+    → SOL entry fee transfer to treasury (if >0)
+    → submit_score instruction: tier gate (tier≥2 gets leaderboard slot)
+    → CharacterStats.xp += game_xp; level-up check
+    → SceneLoader.Load("HomeScene")
+    → HomeSceneManager.LoadOnChainDataAsync() refreshes XP bar
+
+[Player Tier / Pass Flow]
+  NereonPassPopup.OnMintPass()
+    → NereonPassSession.SetTier(2)              [PlayerPrefs cache]
+    → NereonClient.SetPlayerTierAsync(2)        [set_player_tier on-chain tx]
+    → UserProfile.player_tier = 2 on devnet
+```
+
+---
+
 ❓ Open Questions
 What game mechanic goes inside each building? (Coin Flip, Card Table, Puzzle Tower, Oracle, Arena)
 NEREON token: new SPL mint or use SOL directly for rewards?
