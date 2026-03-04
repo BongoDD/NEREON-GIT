@@ -1,7 +1,7 @@
 NEREON — Project Bible
 Single source of truth. Read this before every session.
 Every Copilot session, every developer decision, every architecture change is reflected here.
-Last updated: Session 21 — 2026-03-04 (NereonPassPopup.cs created: DontDestroyOnLoad singleton, static Show()/ShowIfNeeded()/Hide(), fade in/out, backdrop tap-to-close, X button top-right, MINT PASS + PLAY FREE buttons, full runtime UI. NereonPassSession.cs created: PlayerPrefs tier cache (tier 0/1/2). LoginFlowController.Awake() now calls NereonPassPopup.ShowIfNeeded() for first-time auto-show. BtnPassPopUp auto-wired via SceneManager.sceneLoaded + label updates by tier.)
+Last updated: Session 22 — 2026-03-03 (NereonPassPopup.cs redesigned: regular MonoBehaviour on PassPopUP_Panel — self-as-backdrop pattern (panel IS full-screen dark overlay, stretch anchors + semi-transparent Image). Wires own buttons by name. BtnPassPopUp auto-wired from scene. Auto-shows in Start() if tier==0. No sibling backdrop GO needed. NereonPassSession.cs stable. Full project evaluation completed — see Session 22 decisions log.)
 
 🎯 The Vision
 NEREON is a restricted open-world, third-person online RPG built entirely on the Solana blockchain.
@@ -622,7 +622,7 @@ Pass Popup Trigger Rules
                        (auto on Awake + manual button click) call the same code path.
 
 Unity Implementation Plan
-  NereonPassPopup.cs          — ✅ DONE. DontDestroyOnLoad singleton. Static Show()/ShowIfNeeded()/Hide(). Backdrop tap-to-close + X button. MINT PASS + PLAY FREE buttons. Fade in/out. BtnPassPopUp auto-wired via SceneManager.sceneLoaded.
+  NereonPassPopup.cs          — ✅ Script done. MonoBehaviour on PassPopUP_Panel. Self-as-backdrop (panel IS fullscreen dark overlay). Wires own buttons by name. BtnPassPopUp auto-wired. Auto-shows if tier==0. ⚠️ Component not yet added to PassPopUP_Panel in Inspector — add via Add Component → NereonPassPopup.
   NereonPassSession.cs        — ✅ DONE. PlayerPrefs tier cache (tier 0=unset/1=free/2=pass). SetTier(), HasChosenTier, HasPass.
   NereonPassChecker.cs        — Async check: HasPassAsync(pubkey) → bool (cached per session)
   NereonPassMinter.cs         — Builds + sends mint_nereon_pass tx via NereonClient
@@ -707,7 +707,7 @@ Ambient music, cinematic intro, bubble chat
  ✅ Fix WASD editor movement — NereonMobileInput keyboard fallback now runs before _active guard; movement injection also runs before guard; WASD works from first frame in editor without waiting for MobileHUDCanvas to link
  ✅ Fix PlayerHUD world-space inheritance bug — PlayerHUDCanvas was parented to PlayerHUD GO (inside [HUD Canvas] WorldSpace Canvas); Unity inherited WorldSpace render mode, making panel appear wrong position/size. Fixed by creating PlayerHUDCanvas as scene-root GO (no parent). Tracked via _canvasGO field, destroyed in OnDestroy().
  ✅ Fix camera "too far" — SimpleFollowCamera defaults tuned: _pitchAngle 55→45 (more forward-facing, character more visible), _followDist 10→6 (closer final view), _introStartDist 60→100 (dramatic zoom-in), _introZoomTime 2.5→3s, _lookOffsetY 1.2→1.5 (aim at torso/head)
- ✅ NereonPassPopup — DontDestroyOnLoad singleton. Static Show()/ShowIfNeeded()/Hide(). Backdrop tap-to-close + X button top-right. MINT PASS + PLAY FREE buttons. Fade in/out. BtnPassPopUp auto-wired via SceneManager.sceneLoaded. LoginFlowController.Awake() calls ShowIfNeeded() for first-time auto-show.
+ ✅ NereonPassPopup — MonoBehaviour on PassPopUP_Panel (child of LandingCanvas). Self-as-backdrop: panel IS the full-screen dark overlay (stretch anchors, semi-transparent Image, Button on root). Auto-wires close_btn/mintPass_btn/playFreeWithAdds_btn by name. BtnPassPopUp (scene button) auto-wired in Start(). SetActive(false) in Awake; shows in Start() if !HasChosenTier. Mint Pass → tier 2 + toast; Play Free → tier 1 + toast; backdrop tap or X → hide. ⚠️ STILL NEEDS: Add NereonPassPopup component to PassPopUP_Panel in Unity Inspector.
  ✅ NereonPassSession — PlayerPrefs tier cache. tier 0=unset (never chosen), 1=free, 2=pass holder.
  🔧 Wire Fantasy Wooden GUI sprites into PlayerHUD + MobileHUDCanvas via [SerializeField] fields
  🔧 True circular button shapes (runtime Texture2D circle sprites, or Fantasy Wooden GUI sprites)
@@ -795,6 +795,10 @@ Date	Decision	Reason
 2026-03-02	HomeSceneCinematic descent endPos fixed	Was using _cam.transform.rotation from orbital phase to compute follow-camera endPos — orbital rotation aims upward, giving an endPos above the player. Fixed: use Quaternion.Euler(45,45,0) * Vector3.back * 8 for a predictable close-up landing.
 2026-03-02	NereonNetworkManager async null-guard	async void methods + Unity async = race condition: object destroyed while awaiting Relay/Lobby → MissingReferenceException on resume. Fixed: IsAlive() check after every await in CreateLobbyAndHostAsync and JoinLobbyAsync.
 2026-03-02	Auth stack — NereonSessionManager + BiometricAuthManager	Session persistence (7-day expiry) via PlayerPrefs (public key + wallet type only — no private keys). Biometric gate uses OS BiometricPrompt on Android / LAContext on iOS — dApp never sees biometric data (Solana dApp Store policy compliant). LoginFlowController now shows "Welcome Back" panel for returning users.
+2026-03-03NereonPassPopup redesign: self-as-backdrop patternPassPopUP_Panel IS the full-screen dark overlay (stretch to fill canvas, semi-transparent Image). No sibling backdrop GO needed. Button on root panel closes on tap-outside. WireSelfAsBackdrop() adds it in Awake(). Single SetActive call — simpler and fewer GOs.
+2026-03-03NereonPassPopup: regular MonoBehaviour, not DontDestroyOnLoadPopup is LandingScene-only. DontDestroyOnLoad would survive into HomeScene. Simple MonoBehaviour on PassPopUP_Panel with static Instance ref, cleared on Destroy.
+2026-03-03No .asmdef for _NEREON/Scripts — intentional for nowAll scripts share Assembly-CSharp. A compile error anywhere (MightyDevOps, etc.) blocks all scripts. Monitor compile times; add _NEREON.asmdef in a future cleanup sprint if needed.
+2026-03-03Anchor distribute_monthly_rewards is a stub — Phase 7 blockerlib.rs: actual SPL token transfer from RewardEscrow to top-5 winners is TODO. Currently only marks reward_distributed=true and emits a winners event. Must be completed before Mainnet.
 
 content_copy
 ❓ Open Questions
@@ -813,3 +817,10 @@ Will NPCs ever be added to the town? (quest givers, ambient characters)
 [Session 13] Camera yaw angle (currently 45°) — should it be 0° (straight-behind) or remain diagonal?
 [Session 13] Fantasy Wooden GUI sprites — move to Resources/ or wire via [SerializeField] in Inspector?
 [Session 13] MobileHUDCanvas buttons — generate circle Texture2D at runtime, or rely on Fantasy Wooden GUI sprites?
+
+[Session 22] NereonPassPopup component — has it been added to PassPopUP_Panel in LandingScene Inspector?
+[Session 22] PassPopUP_Panel visual setup — does it have stretch-fill RectTransform + semi-transparent Image as backdrop?
+[Session 22] HomeScene errors from paste file — investigate and fix NullRef/missing component errors in HomeSceneManager/AvatarManager.
+[Session 22] NereonPassMinter.cs + NereonPassChecker.cs — when do we implement actual on-chain mint_nereon_pass instruction? Phase 5B or Phase 6?
+[Session 22] LeaderboardScene — create it and wire from HomeScene options menu. Which session?
+[Session 22] Add _NEREON.asmdef? — would isolate compile errors from third-party packages (MightyDevOps, etc.). Low risk, fast to do.
