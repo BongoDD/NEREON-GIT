@@ -32,12 +32,13 @@ pub mod nereon {
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
 
-        let p        = &mut ctx.accounts.user_profile;
-        p.authority  = ctx.accounts.authority.key();
-        p.avatar_id  = avatar_id;
-        p.username   = username;
-        p.created_at = now;
-        p.bump       = ctx.bumps.user_profile;
+        let p             = &mut ctx.accounts.user_profile;
+        p.authority      = ctx.accounts.authority.key();
+        p.avatar_id      = avatar_id;
+        p.username       = username;
+        p.created_at     = now;
+        p.player_tier    = 0;  // 0=unset, 1=free, 2=pass holder
+        p.bump           = ctx.bumps.user_profile;
 
         let s          = &mut ctx.accounts.character_stats;
         s.authority    = ctx.accounts.authority.key();
@@ -66,23 +67,51 @@ pub mod nereon {
         Ok(())
     }
 
+    // ── set_player_tier ───────────────────────────────────────────────────────
+    /// Set the player's pass tier (0=unset, 1=free w/ ads, 2=pass holder).
+    /// Only the owning wallet may call this.
+    pub fn set_player_tier(ctx: Context<SetPlayerTier>, tier: u8) -> Result<()> {
+        require!(tier <= 2, NereonError::InvalidTier);
+        ctx.accounts.user_profile.player_tier = tier;
+        Ok(())
+    }
+
     // ── submit_score ──────────────────────────────────────────────────────────
     /// Submit a mini-game score.
-    /// - Awards XP to the character and checks for level-up.
-    /// - Updates the monthly leaderboard top-5.
+    /// - Collects an optional SOL entry fee (transfer to treasury).
+    /// - Awards XP to the character and checks for level-up (all tiers).
+    /// - Updates the monthly leaderboard top-5 (tier 2 / pass holders only).
     /// - Creates the leaderboard account if this is the first score for that month.
     pub fn submit_score(
-        ctx:     Context<SubmitScore>,
-        game_id: u8,
-        month:   u8,
-        year:    u16,
-        score:   u32,
+        ctx:                Context<SubmitScore>,
+        game_id:            u8,
+        game_name:          [u8; 32],
+        month:              u8,
+        year:               u16,
+        score:              u32,
+        entry_fee_lamports: u64,
     ) -> Result<()> {
         require!(month >= 1 && month <= 12, NereonError::InvalidMonth);
 
+        // ── Entry Fee ─────────────────────────────────────────────────────────
+        if entry_fee_lamports > 0 {
+            anchor_lang::solana_program::program::invoke(
+                &anchor_lang::solana_program::system_instruction::transfer(
+                    &ctx.accounts.authority.key(),
+                    &ctx.accounts.treasury.key(),
+                    entry_fee_lamports,
+                ),
+                &[
+                    ctx.accounts.authority.to_account_info(),
+                    ctx.accounts.treasury.to_account_info(),
+                    ctx.accounts.system_program.to_account_info(),
+                ],
+            )?;
+        }
+
         let player = ctx.accounts.authority.key();
 
-        // ── XP + Level-up ─────────────────────────────────────────────────────
+        // ── XP + Level-up (all tiers) ─────────────────────────────────────────
         let s = &mut ctx.accounts.character_stats;
         let xp_earned = XP_BASE.saturating_add((score / 100).saturating_mul(XP_PER_100_SCORE));
         s.xp           = s.xp.saturating_add(xp_earned);
@@ -97,20 +126,25 @@ pub mod nereon {
             }
         }
 
-        // ── Leaderboard ───────────────────────────────────────────────────────
+        // ── Leaderboard (pass holders only) ───────────────────────────────────
         let lb = &mut ctx.accounts.game_leaderboard;
 
         // First submission for this game+month+year initialises the account.
         if !lb.is_initialized {
             lb.is_initialized     = true;
             lb.game_id            = game_id;
+            lb.game_name          = game_name;
             lb.month              = month;
             lb.year               = year;
             lb.reward_distributed = false;
             lb.bump               = ctx.bumps.game_leaderboard;
         }
 
-        lb.try_update(LeaderboardEntry { player, score });
+        // Only tier-2 (pass holders) earn leaderboard slots.
+        let tier = ctx.accounts.user_profile.player_tier;
+        if tier >= 2 {
+            lb.try_update(LeaderboardEntry { player, score });
+        }
 
         emit!(ScoreSubmitted { player, game_id, score, xp_earned });
         Ok(())
@@ -196,7 +230,20 @@ pub struct UpdateProfile<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(game_id: u8, month: u8, year: u16)]
+pub struct SetPlayerTier<'info> {
+    #[account(
+        mut,
+        seeds   = [b"user_profile", authority.key().as_ref()],
+        bump    = user_profile.bump,
+        has_one = authority,
+    )]
+    pub user_profile: Account<'info, UserProfile>,
+
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+#[instruction(game_id: u8, game_name: [u8; 32], month: u8, year: u16)]
 pub struct SubmitScore<'info> {
     #[account(
         mut,
@@ -206,6 +253,14 @@ pub struct SubmitScore<'info> {
     )]
     pub character_stats: Account<'info, CharacterStats>,
 
+    /// Read profile to gate leaderboard access by tier.
+    #[account(
+        seeds   = [b"user_profile", authority.key().as_ref()],
+        bump    = user_profile.bump,
+        has_one = authority,
+    )]
+    pub user_profile: Account<'info, UserProfile>,
+
     #[account(
         init_if_needed,
         payer = authority,
@@ -214,6 +269,10 @@ pub struct SubmitScore<'info> {
         bump
     )]
     pub game_leaderboard: Account<'info, GameLeaderboard>,
+
+    /// CHECK: Treasury wallet that receives entry fees. Verified by the game client.
+    #[account(mut)]
+    pub treasury: AccountInfo<'info>,
 
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -264,11 +323,12 @@ pub struct CloseUserAccounts<'info> {
 #[account]
 #[derive(InitSpace)]
 pub struct UserProfile {
-    pub authority:  Pubkey,   // 32
-    pub avatar_id:  u8,       //  1
-    pub username:   [u8; 32], // 32  — UTF-8, right-padded with zeros
-    pub created_at: i64,      //  8
-    pub bump:       u8,       //  1   total: 74 + 8 disc = 82
+    pub authority:   Pubkey,   // 32
+    pub avatar_id:   u8,       //  1
+    pub username:    [u8; 32], // 32  — UTF-8, right-padded with zeros
+    pub created_at:  i64,      //  8
+    pub player_tier: u8,       //  1  — 0=unset, 1=free, 2=pass holder
+    pub bump:        u8,       //  1   total: 75 + 8 disc = 83
 }
 
 #[account]
@@ -284,13 +344,14 @@ pub struct CharacterStats {
 #[account]
 #[derive(InitSpace)]
 pub struct GameLeaderboard {
-    pub game_id:            u8,                              //   1
-    pub month:              u8,                              //   1
-    pub year:               u16,                             //   2
-    pub is_initialized:     bool,                            //   1
+    pub game_id:            u8,                                  //   1
+    pub month:              u8,                                  //   1
+    pub year:               u16,                                 //   2
+    pub is_initialized:     bool,                                //   1
+    pub game_name:          [u8; 32],                            //  32  — UTF-8 minigame identifier
     pub top_entries:        [LeaderboardEntry; MAX_TOP_ENTRIES], // 5×36 = 180
-    pub reward_distributed: bool,                            //   1
-    pub bump:               u8,                              //   1  total: 187 + 8 = 195
+    pub reward_distributed: bool,                                //   1
+    pub bump:               u8,                                  //   1  total: 219 + 8 = 227
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Default, InitSpace)]
@@ -372,4 +433,6 @@ pub enum NereonError {
     InvalidMonth,
     #[msg("Only the designated authority may perform this action.")]
     Unauthorized,
+    #[msg("Tier must be 0 (unset), 1 (free), or 2 (pass holder).")]
+    InvalidTier,
 }

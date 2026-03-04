@@ -729,6 +729,7 @@ Ambient music, cinematic intro, bubble chat
 🔲 Phase 9 — Seeker Submission
  End-to-end Devnet test (login → game → reward)
  Promote Anchor program to Mainnet
+ **Register own Web3Auth account + clientId at dashboard.web3auth.io (MANDATORY before submission)**
  Test MWA on real Seeker hardware
  Submit via https://seeker.solana.com
 ⚠️ Architecture Gotchas — Important for Every Session
@@ -798,7 +799,12 @@ Date	Decision	Reason
 2026-03-03NereonPassPopup redesign: self-as-backdrop patternPassPopUP_Panel IS the full-screen dark overlay (stretch to fill canvas, semi-transparent Image). No sibling backdrop GO needed. Button on root panel closes on tap-outside. WireSelfAsBackdrop() adds it in Awake(). Single SetActive call — simpler and fewer GOs.
 2026-03-03NereonPassPopup: regular MonoBehaviour, not DontDestroyOnLoadPopup is LandingScene-only. DontDestroyOnLoad would survive into HomeScene. Simple MonoBehaviour on PassPopUP_Panel with static Instance ref, cleared on Destroy.
 2026-03-03No .asmdef for _NEREON/Scripts — intentional for nowAll scripts share Assembly-CSharp. A compile error anywhere (MightyDevOps, etc.) blocks all scripts. Monitor compile times; add _NEREON.asmdef in a future cleanup sprint if needed.
-2026-03-03Anchor distribute_monthly_rewards is a stub — Phase 7 blockerlib.rs: actual SPL token transfer from RewardEscrow to top-5 winners is TODO. Currently only marks reward_distributed=true and emits a winners event. Must be completed before Mainnet.
+Web3Auth clientId — PRODUCTION BLOCKER	⚠️ Current clientId (`BPi5PB_UiIZ...`) is the Solana Unity SDK **shared demo key** (network: SAPPHIRE_MAINNET). It works for development but is NOT suitable for production launch. Before Seeker submission: (1) Create account at dashboard.web3auth.io, (2) Register a new project, (3) Add custom redirectUrl matching your Android bundle ID (e.g. `torusapp://com.nereon.app/auth`), (4) Whitelist your redirect URIs, (5) Replace clientId in LandingScene Web3 component. The network value must match the registered project environment (SAPPHIRE_MAINNET for production).
+Web3Auth network mismatch fix (Session 23)	Scene had `network: 4` (SAPPHIRE_DEVNET) but the demo clientId is only registered on `network: 5` (SAPPHIRE_MAINNET) — caused `"Init parameters not found... localStorage"` error on the Web3Auth login page. Fixed by setting network: 5 in LandingScene. Root cause: different network environments use separate localStorage buckets on the auth page.
+LoginWeb3Auth task was silently dropped (Session 23)	`Web3.Instance.LoginWeb3Auth(Provider.GOOGLE)` returns `async Task<Account>` — calling it without `.AsUniTask().Forget()` let the state machine be GC'd before the OAuth browser opened. Fixed: all login calls now use `.AsUniTask().Forget(errorHandler)`. Same fix applied to `LoginWalletAdapter()` in reconnect path.
+2026-03-04	Anchor lib.rs: player_tier, set_player_tier, game_name, entry_fee_lamports	Player pass tier (0/1/2) now stored in UserProfile on-chain. submit_score gates leaderboard slots to tier≥2. Entry fee SOL transfer to treasury added. game_name [u8;32] stored in GameLeaderboard.
+2026-03-04	NereonClient.cs: SetPlayerTierAsync + updated BuildSubmitScoreIx	New async helper fires set_player_tier instruction. BuildSubmitScoreIx updated with game_name, entry_fee_lamports, treasury account, user_profile read account.
+2026-03-04	NereonPassPopup: fires on-chain set_player_tier after local SetTier()	OnMintPass/OnPlayFree now call SetTierOnChainAsync(tier).Forget() immediately after NereonPassSession.SetTier(). Shows toast on confirm or warning on fail — local cache always kept.
 
 content_copy
 ❓ Open Questions
@@ -824,3 +830,8 @@ Will NPCs ever be added to the town? (quest givers, ambient characters)
 [Session 22] NereonPassMinter.cs + NereonPassChecker.cs — when do we implement actual on-chain mint_nereon_pass instruction? Phase 5B or Phase 6?
 [Session 22] LeaderboardScene — create it and wire from HomeScene options menu. Which session?
 [Session 22] Add _NEREON.asmdef? — would isolate compile errors from third-party packages (MightyDevOps, etc.). Low risk, fast to do.
+
+[Session 23] NereonPassPopup + PassPopUP_Panel — confirm NereonPassPopup component is attached in LandingScene Inspector and PassPopUP_Panel has stretch-fill RectTransform + semi-transparent Image.
+[Session 23] set_player_tier on-chain — needs re-deploy of Anchor program (lib.rs updated with player_tier field, set_player_tier instruction, game_name in GameLeaderboard, entry_fee_lamports in submit_score). Run `anchor deploy` on devnet.
+[Session 23] Web3Auth own account — BEFORE Seeker submission, register at dashboard.web3auth.io and replace demo clientId in LandingScene. See Architecture Gotchas above.
+[Session 23] Camera rewrite: vThirdPersonCamera FixedAngle mode — NereonCameraSetup.cs still destroys vThirdPersonCamera. Plan fully designed (use TPCameraMode.FixedAngle, fixedAngle=Vector2(45,52), call tpCam.Init()) — implementation pending.
